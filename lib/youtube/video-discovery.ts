@@ -21,10 +21,12 @@ export async function discoverVideos(
   continuationToken?: string
 ): Promise<DiscoveryResult> {
   try {
-    const result = await ytch.getChannelVideos(channelId, {
-      sortBy: 'newest',
+    const payload={
+      channelId,
+      sortBy: "oldest" as "oldest",
       continuation: continuationToken,
-    });
+    }
+    const result = await ytch.getChannelVideos(payload);
 
     if (!result || !result.items) {
       return { videos: [], hasMore: false };
@@ -61,7 +63,7 @@ export async function discoverVideos(
 
     return {
       videos,
-      continuationToken: result.continuation,
+      continuationToken: result.continuation as string|undefined,
       hasMore: !!result.continuation,
     };
   } catch (error) {
