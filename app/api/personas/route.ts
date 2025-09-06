@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { createServerClient } from '@supabase/ssr';
 import { z } from 'zod';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -43,6 +44,22 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
     }
 
+    // Ensure user exists in public.users table
+    const { error: userUpsertError } = await supabase
+      .from('users')
+      .upsert({
+        id: user.id,
+        email: user.email || '',
+        updated_at: new Date().toISOString(),
+      }, {
+        onConflict: 'id'
+      });
+
+    if (userUpsertError) {
+      console.error('Failed to upsert user:', userUpsertError);
+      return NextResponse.json({ error: 'Failed to create user record' }, { status: 500 });
+    }
+
     const body = await request.json();
     const validatedData = createPersonaSchema.parse(body);
 
@@ -84,7 +101,21 @@ export async function POST(request: NextRequest) {
 
     // Create background job for video discovery
     const jobId = uuidv4();
-    const { error: jobError } = await supabase
+    
+    // Create service role client for job insertion
+    const serviceClient = createServerClient(
+      process.env.SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+      {
+        cookies: {
+          get() { return undefined },
+          set() {},
+          remove() {},
+        },
+      }
+    );
+    
+    const { error: jobError } = await serviceClient
       .from('jobs')
       .insert({
         id: jobId,
