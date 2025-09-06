@@ -7,10 +7,13 @@ import { Header } from '@/components/layout/header';
 import { Sidebar } from '@/components/layout/sidebar';
 import { ChatInterface } from '@/components/chat/chat-interface';
 import { Button } from '@/components/ui/button';
-import { Menu } from 'lucide-react';
+import { Menu, Settings } from 'lucide-react';
+import { useAuth } from '@/components/providers/auth-provider';
+import Link from 'next/link';
 
 interface Persona {
   id: string;
+  user_id: string;
   username: string;
   title: string;
   description: string;
@@ -20,6 +23,7 @@ interface Persona {
 
 export default function ChatPage() {
   const params = useParams();
+  const { user } = useAuth();
   const username = params.username as string;
   const [persona, setPersona] = useState<Persona | null>(null);
   const [loading, setLoading] = useState(true);
@@ -31,7 +35,7 @@ export default function ChatPage() {
       
       const { data, error } = await supabase
         .from('personas')
-        .select('id, username, title, description, thumbnail_url, discovery_status')
+        .select('id, user_id, username, title, description, thumbnail_url, discovery_status')
         .eq('username', username)
         .single();
 
@@ -82,7 +86,7 @@ export default function ChatPage() {
       
       <main className="lg:pl-80 transition-all duration-300">
         {/* Mobile menu button */}
-        <div className="lg:hidden p-4 border-b bg-white/80 backdrop-blur-md">
+        <div className="lg:hidden p-4 border-b bg-white/80 backdrop-blur-md flex justify-between items-center">
           <Button
             variant="outline"
             size="sm"
@@ -91,7 +95,28 @@ export default function ChatPage() {
             <Menu className="h-4 w-4 mr-2" />
             Chat History
           </Button>
+          
+          {user && persona && persona.user_id === user.id && (
+            <Link href={`/chat/${username}/settings`}>
+              <Button variant="outline" size="sm">
+                <Settings className="h-4 w-4 mr-2" />
+                Settings
+              </Button>
+            </Link>
+          )}
         </div>
+
+        {/* Desktop settings button */}
+        {user && persona && persona.user_id === user.id && (
+          <div className="hidden lg:block absolute top-4 right-4 z-10">
+            <Link href={`/chat/${username}/settings`}>
+              <Button variant="outline" size="sm">
+                <Settings className="h-4 w-4 mr-2" />
+                Settings
+              </Button>
+            </Link>
+          </div>
+        )}
 
         <ChatInterface persona={persona} />
       </main>

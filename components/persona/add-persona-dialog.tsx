@@ -79,11 +79,17 @@ export function AddPersonaDialog() {
       }
 
       toast.success('Persona created! Video discovery has started in the background.');
+      const result = await response.json();
       setIsOpen(false);
       setChannelInput('');
       setPreview(null);
-      // Refresh the page to show the new persona
-      window.location.reload();
+      
+      // Redirect to settings page
+      if (result.redirectTo) {
+        window.location.href = result.redirectTo;
+      } else {
+        window.location.reload();
+      }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to create persona');
     } finally {

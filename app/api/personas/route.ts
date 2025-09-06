@@ -99,41 +99,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: personaError.message }, { status: 500 });
     }
 
-    // Create background job for video discovery
-    const jobId = uuidv4();
-    
-    // Create service role client for job insertion
-    const serviceClient = createServerClient(
-      process.env.SUPABASE_URL!,
-      process.env.SUPABASE_ANON_KEY!,
-      {
-        cookies: {
-          get() { return undefined },
-          set() {},
-          remove() {},
-        },
-      }
-    );
-    
-    const { error: jobError } = await serviceClient
-      .from('jobs')
-      .insert({
-        id: jobId,
-        type: 'video_discovery',
-        payload: {
-          personaId: persona.id,
-          channelId: validatedData.channelId,
-        },
-        status: 'pending',
-        idempotency_key: `video_discovery_${persona.id}`,
-        max_retries: 3,
-      });
-
-    if (jobError) {
-      console.error('Failed to create video discovery job:', jobError);
-    }
-
-    return NextResponse.json(persona, { status: 201 });
+    return NextResponse.json({ 
+      ...persona, 
+      redirectTo: `/chat/${persona.username}/settings` 
+    }, { status: 201 });
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: 'Invalid input data' }, { status: 400 });

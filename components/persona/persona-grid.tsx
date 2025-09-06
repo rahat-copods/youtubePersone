@@ -5,12 +5,13 @@ import { createClient } from '@/lib/supabase/client';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Users, Video, Clock, MessageSquare } from 'lucide-react';
+import { Users, Video, Clock, MessageSquare, Settings } from 'lucide-react';
 import Link from 'next/link';
 import { useAuth } from '@/components/providers/auth-provider';
 
 interface Persona {
   id: string;
+  user_id: string;
   username: string;
   title: string;
   description: string;
@@ -124,6 +125,19 @@ export function PersonaGrid() {
                   Chat
                 </Button>
               </Link>
+              
+              {user && persona.user_id === user.id && (
+                <Link href={`/chat/${persona.username}/settings`}>
+                  <Button 
+                    variant="outline"
+                    className="w-full" 
+                    size="sm"
+                  >
+                    <Settings className="mr-2 h-3 w-3" />
+                    Settings
+                  </Button>
+                </Link>
+              )}
             </div>
           </CardContent>
         </Card>
