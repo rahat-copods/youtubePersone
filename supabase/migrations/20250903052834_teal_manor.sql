@@ -127,6 +127,7 @@ CREATE TABLE IF NOT EXISTS videos (
   view_count integer DEFAULT 0,
   captions_status text DEFAULT 'pending',
   captions_error text,
+  apify_runid text UNIQUE,
   created_at timestamptz DEFAULT now(),
   updated_at timestamptz DEFAULT now()
 );
