@@ -334,30 +334,26 @@ END;
 $$;
 
 -- Trigger to automatically insert/update users table
-CREATE OR REPLACE FUNCTION handle_new_user()
-RETURNS TRIGGER AS $$
-BEGIN
-  INSERT INTO users (id, email, created_at, updated_at)
-  VALUES (new.id, new.email, new.created_at, now())
-  ON CONFLICT (id) 
-  DO UPDATE SET
-    email = new.email,
-    updated_at = now();
-  RETURN new;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+create or replace function public.handle_new_user()
+returns trigger
+language plpgsql
+security definer
+as $$
+begin
+  insert into public.users (id, email, created_at, updated_at)
+  values (new.id, new.email, now(), now())
+  on conflict (id) do update
+    set email = excluded.email,
+        updated_at = now();
+  return new;
+end;
+$$;
+
 
 -- Trigger on auth.users table
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_trigger WHERE tgname = 'on_auth_user_created'
-  ) THEN
-    CREATE TRIGGER on_auth_user_created
-      AFTER INSERT OR UPDATE ON auth.users
-      FOR EACH ROW EXECUTE FUNCTION handle_new_user();
-  END IF;
-END $$;
+CREATE TRIGGER on_auth_user_created
+  AFTER INSERT OR UPDATE ON auth.users
+  FOR EACH ROW EXECUTE FUNCTION handle_new_user();
 
 -- Update timestamps trigger function
 CREATE OR REPLACE FUNCTION update_updated_at_column()

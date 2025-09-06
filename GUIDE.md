@@ -76,7 +76,7 @@ Deploy the job processor edge function:
 
 4. Deploy the edge function:
    ```bash
-   supabase functions deploy job-processor
+   supabase functions deploy job-processor --no-verify-jwt
    ```
 
 5. Set up environment variables for the edge function:
