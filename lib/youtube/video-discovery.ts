@@ -1,4 +1,10 @@
-import ytch from 'yt-channel-info';
+import { google } from "googleapis";
+
+const apiKey = process.env.YOUTUBE_API_KEY as string;
+const youtube = google.youtube({
+  version: "v3",
+  auth: apiKey,
+});
 
 export interface VideoInfo {
   videoId: string;
@@ -12,112 +18,109 @@ export interface VideoInfo {
 
 export interface DiscoveryResult {
   videos: VideoInfo[];
-  continuationToken?: string;
+  continuationToken?: string; // stores last publishedAt date
   hasMore: boolean;
 }
 
-export async function discoverVideos(
-  channelId: string, 
-  continuationToken?: string
-): Promise<DiscoveryResult> {
-  try {
-    const payload={
-      channelId,
-      sortBy: "oldest" as "oldest",
-      continuation: continuationToken,
-    }
-    const result = await ytch.getChannelVideos(payload);
+// Step 1: Get the uploads playlist for a channel
+async function getUploadsPlaylistId(channelId: string) {
+  const res = await youtube.channels.list({
+    part: ["contentDetails"],
+    id: [channelId],
+  });
 
-    if (!result || !result.items) {
-      return { videos: [], hasMore: false };
-    }
+  if (!res.data.items?.length) {
+    throw new Error("Channel not found or no uploads playlist");
+  }
+  return res.data.items[0].contentDetails!.relatedPlaylists!.uploads!;
+}
 
-    const videos: VideoInfo[] = result.items.map((item: any) => {
-      // Handle different thumbnail formats
-      let thumbnailUrl = '';
-      if (item.videoThumbnails && item.videoThumbnails.length > 0) {
-        thumbnailUrl = item.videoThumbnails[0].url;
-      } else if (item.thumbnail) {
-        thumbnailUrl = item.thumbnail;
-      }
+// Step 2: Fetch playlist page
+async function getPlaylistPage(playlistId: string, pageToken?: string) {
+  const res = await youtube.playlistItems.list({
+    part: ["snippet", "contentDetails"],
+    playlistId,
+    maxResults: 50,
+    pageToken: pageToken || undefined,
+  });
 
-      // Handle published date
-      let publishedAt = new Date().toISOString();
-      if (item.publishedText) {
-        // Try to parse relative time like "2 days ago"
-        publishedAt = parseRelativeTime(item.publishedText);
-      } else if (item.published) {
-        publishedAt = new Date(item.published * 1000).toISOString();
-      }
+  return {
+    items: res.data.items || [],
+    nextPageToken: res.data.nextPageToken || null,
+  };
+}
 
-      return {
-        videoId: item.videoId || item.id,
-        title: item.title || '',
-        description: item.descriptionSnippet || item.description || '',
-        thumbnailUrl,
-        duration: item.lengthSeconds ? formatDuration(parseInt(item.lengthSeconds)) : (item.duration || '0:00'),
-        publishedAt,
-        viewCount: parseInt(item.viewCount) || 0,
-      };
-    });
+// Step 3: Get full details for videoIds
+async function getVideoDetails(videoIds: string[]) {
+  const res = await youtube.videos.list({
+    part: ["snippet", "contentDetails", "statistics"],
+    id: videoIds,
+    maxResults: 50,
+  });
 
+  return res.data.items?.map((item) => {
+    const { id, snippet, contentDetails, statistics } = item;
     return {
-      videos,
-      continuationToken: result.continuation as string|undefined,
-      hasMore: !!result.continuation,
+      videoId: id!,
+      title: snippet?.title || "",
+      description: snippet?.description || "",
+      thumbnailUrl:
+        snippet?.thumbnails?.high?.url ||
+        snippet?.thumbnails?.default?.url ||
+        "",
+      publishedAt: snippet?.publishedAt || new Date().toISOString(),
+      duration: contentDetails?.duration || "PT0M0S",
+      viewCount: parseInt(statistics?.viewCount || "0"),
     };
-  } catch (error) {
-    console.error('Video discovery error:', error);
-    throw new Error('Failed to discover videos');
-  }
+  }) as VideoInfo[];
 }
 
-function parseRelativeTime(relativeTime: string): string {
-  const now = new Date();
-  const timeRegex = /(\d+)\s+(second|minute|hour|day|week|month|year)s?\s+ago/i;
-  const match = relativeTime.match(timeRegex);
-  
-  if (!match) {
-    return now.toISOString();
-  }
-  
-  const amount = parseInt(match[1]);
-  const unit = match[2].toLowerCase();
-  
-  switch (unit) {
-    case 'second':
-      now.setSeconds(now.getSeconds() - amount);
-      break;
-    case 'minute':
-      now.setMinutes(now.getMinutes() - amount);
-      break;
-    case 'hour':
-      now.setHours(now.getHours() - amount);
-      break;
-    case 'day':
-      now.setDate(now.getDate() - amount);
-      break;
-    case 'week':
-      now.setDate(now.getDate() - (amount * 7));
-      break;
-    case 'month':
-      now.setMonth(now.getMonth() - amount);
-      break;
-    case 'year':
-      now.setFullYear(now.getFullYear() - amount);
-      break;
-  }
-  
-  return now.toISOString();
-}
+// Step 4: Main discover function
+export async function discoverVideos(
+  channelId: string,
+  continuationToken?: string // we store last fetched publish date here
+): Promise<DiscoveryResult> {
+  const uploadsPlaylistId = await getUploadsPlaylistId(channelId);
 
-function formatDuration(seconds: number): string {
-  const hours = Math.floor(seconds / 3600);
-  const minutes = Math.floor((seconds % 3600) / 60);
-  const secs = seconds % 60;
+  let pageToken: string | undefined = undefined;
+  let allVideos: VideoInfo[] = [];
+  let stopDate = continuationToken ? new Date(continuationToken) : null;
+  let done = false;
 
-  if (hours > 0) {
-    return `${hours}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  while (!done) {
+    const { items, nextPageToken } = await getPlaylistPage(
+      uploadsPlaylistId,
+      pageToken
+    );
+
+    if (!items.length) break;
+
+    const videoIds = items
+      .map((i) => i.contentDetails?.videoId!)
+      .filter(Boolean);
+    const details = await getVideoDetails(videoIds);
+
+    for (let v of details) {
+      if (stopDate && new Date(v.publishedAt) <= stopDate) {
+        done = true;
+        break;
+      }
+      allVideos.push(v);
+    }
+
+    if (!nextPageToken) break;
+    pageToken = nextPageToken;
   }
-  return `${minutes}:${secs.toString().padStart(2, '0')}`;
+
+  // Reverse because API returns newest→oldest
+  allVideos.reverse();
+
+  const lastVideo =
+    allVideos.length > 0 ? allVideos[allVideos.length - 1] : null;
+
+  return {
+    videos: allVideos,
+    continuationToken: lastVideo ? lastVideo.publishedAt : continuationToken,
+    hasMore: !!lastVideo,
+  };
 }
