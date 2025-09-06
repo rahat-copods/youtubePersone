@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ArrowLeft, Settings, Sync, Play, Loader2, Video, MessageSquare } from 'lucide-react';
+import { ArrowLeft, Settings, FolderSync as Sync, Play, Loader2, Video, MessageSquare } from 'lucide-react';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
 import { useAuth } from '@/components/providers/auth-provider';
