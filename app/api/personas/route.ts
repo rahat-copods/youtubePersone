@@ -45,20 +45,20 @@ export async function POST(request: NextRequest) {
     }
 
     // Ensure user exists in public.users table
-    const { error: userUpsertError } = await supabase
-      .from('users')
-      .upsert({
-        id: user.id,
-        email: user.email || '',
-        updated_at: new Date().toISOString(),
-      }, {
-        onConflict: 'id'
-      });
+    // const { error: userUpsertError } = await supabase
+    //   .from('users')
+    //   .upsert({
+    //     id: user.id,
+    //     email: user.email || '',
+    //     updated_at: new Date().toISOString(),
+    //   }, {
+    //     onConflict: 'id'
+    //   });
 
-    if (userUpsertError) {
-      console.error('Failed to upsert user:', userUpsertError);
-      return NextResponse.json({ error: 'Failed to create user record' }, { status: 500 });
-    }
+    // if (userUpsertError) {
+    //   console.error('Failed to upsert user:', userUpsertError);
+    //   return NextResponse.json({ error: 'Failed to create user record' }, { status: 500 });
+    // }
 
     const body = await request.json();
     const validatedData = createPersonaSchema.parse(body);
@@ -73,7 +73,7 @@ export async function POST(request: NextRequest) {
 
     if (existingPersona) {
       return NextResponse.json(
-        { error: 'You already have a persona for this channel' },
+        { error: 'Persona already exists for this channel' },
         { status: 409 }
       );
     }
@@ -105,7 +105,7 @@ export async function POST(request: NextRequest) {
     // Create service role client for job insertion
     const serviceClient = createServerClient(
       process.env.SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+      process.env.SUPABASE_ANON_KEY!,
       {
         cookies: {
           get() { return undefined },
