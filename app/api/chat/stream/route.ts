@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, serviceClient } from "@/lib/supabase/server";
 import { OpenAI } from "openai";
 import { z } from "zod";
 
@@ -19,7 +19,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { personaId, message, userId } = requestSchema.parse(body);
 
-    const supabase = createClient();
+    const supabase = serviceClient;
 
     // Get persona info
     const { data: persona, error: personaError } = await supabase

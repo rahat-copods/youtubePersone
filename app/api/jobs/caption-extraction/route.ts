@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, serviceClient } from "@/lib/supabase/server";
 import {
   startApifyRun,
   fetchApifyResults,
@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const { videoId, personaId } = requestSchema.parse(body);
-    const supabase = createClient();
+    const supabase = serviceClient;
 
     // Get video row (check runId first)
     const { data: video } = await supabase
