@@ -300,7 +300,7 @@ CREATE POLICY "Only service role can access jobs"
 
 -- Function for vector similarity search
 CREATE OR REPLACE FUNCTION match_captions (
-  query_embedding vector(1536),
+  query_embedding vector(768),
   persona_id uuid,
   match_threshold float DEFAULT 0.7,
   match_count int DEFAULT 5

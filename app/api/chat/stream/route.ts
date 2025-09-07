@@ -33,10 +33,11 @@ export async function POST(request: NextRequest) {
     }
 
     // Perform vector search for relevant captions
+    const queryEmbedding = await getEmbedding(message);
     const { data: captions, error: captionsError } = await supabase.rpc(
       "match_captions",
       {
-        query_embedding: await getEmbedding(message),
+        query_embedding: queryEmbedding,
         persona_id: personaId,
         match_threshold: 0.7,
         match_count: 5,
