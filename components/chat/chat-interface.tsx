@@ -80,8 +80,17 @@ export function ChatInterface({ persona }: ChatInterfaceProps) {
     e.preventDefault();
     if (!input.trim() || isLoading) return;
 
-    if (persona.discovery_status !== 'completed') {
-      toast.error('This persona is still being processed. Please wait for video discovery to complete.');
+    // Check if persona has any videos with completed captions
+    const supabase = createClient();
+    const { data: completedVideos } = await supabase
+      .from('videos')
+      .select('id')
+      .eq('persona_id', persona.id)
+      .eq('captions_status', 'completed')
+      .limit(1);
+
+    if (!completedVideos || completedVideos.length === 0) {
+      toast.error('This persona needs videos with processed captions before you can chat. Please go to settings to process some videos.');
       return;
     }
 
@@ -319,7 +328,7 @@ export function ChatInterface({ persona }: ChatInterfaceProps) {
                   ? `Ask ${persona.title} anything...`
                   : 'Persona is still processing...'
               }
-              disabled={isLoading || persona.discovery_status !== 'completed'}
+              disabled={isLoading}
               className="flex-1"
             />
             {isStreaming ? (
@@ -327,7 +336,7 @@ export function ChatInterface({ persona }: ChatInterfaceProps) {
                 Stop
               </Button>
             ) : (
-              <Button type="submit" disabled={isLoading || !input.trim() || persona.discovery_status !== 'completed'}>
+              <Button type="submit" disabled={isLoading || !input.trim()}>
                 <Send className="w-4 h-4" />
               </Button>
             )}

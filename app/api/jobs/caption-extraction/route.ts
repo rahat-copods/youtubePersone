@@ -1,20 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient, serviceClient } from "@/lib/supabase/server";
+import { serviceClient } from "@/lib/supabase/server";
 import {
   startApifyRun,
   fetchApifyResults,
 } from "@/lib/apify/caption-extraction";
-import { OpenAI } from "openai";
 import { z } from "zod";
 
 const requestSchema = z.object({
   videoId: z.string(),
   personaId: z.string(),
-});
-
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY!,
-  baseURL: process.env.OPENAI_API_BASE_URL,
 });
 
 export async function POST(request: NextRequest) {
@@ -31,13 +25,18 @@ export async function POST(request: NextRequest) {
       .single();
 
     let runId = video?.apify_runid;
+    
     // Start Apify run if not already started
     if (!runId) {
       runId = await startApifyRun(videoId);
       console.log("Started Apify run:", runId, ":video:", videoId);
       await supabase
         .from("videos")
-        .update({ apify_runid: runId, captions_status: "processing" })
+        .update({ 
+          apify_runid: runId, 
+          captions_status: "processing",
+          processing_started_at: new Date().toISOString()
+        })
         .eq("video_id", videoId);
     }
 
@@ -45,43 +44,44 @@ export async function POST(request: NextRequest) {
       const captions = await fetchApifyResults(runId);
 
       if (captions.length > 0) {
-        const captionsWithEmbeddings = [];
-        for (const caption of captions) {
-          try {
-            const embedding = await openai.embeddings.create({
-              model: "text-embedding-004",
-              input: caption.text,
-            });
+        // Store captions with persona_id and null embeddings
+        const captionsToInsert = captions.map((caption) => ({
+          video_id: videoId,
+          persona_id: personaId,
+          start_time: caption.start,
+          duration: caption.duration,
+          text: caption.text,
+          embedding: null, // Store with null embedding initially
+        }));
 
-            captionsWithEmbeddings.push({
-              video_id: videoId,
-              start_time: caption.start,
-              duration: caption.duration,
-              text: caption.text,
-              embedding: embedding.data[0].embedding,
-            });
-          } catch (e) {
-            console.error("Embedding error:", e);
-          }
+        const { error: insertError } = await supabase
+          .from("captions")
+          .insert(captionsToInsert);
+
+        if (insertError) {
+          throw new Error(`Failed to insert captions: ${insertError.message}`);
         }
 
-        if (captionsWithEmbeddings.length > 0) {
-          await supabase.from("captions").insert(captionsWithEmbeddings);
-        }
-
+        // Update video status to 'extracted' (captions available but not embedded)
         await supabase
           .from("videos")
-          .update({ captions_status: "completed" })
+          .update({ 
+            captions_status: "extracted",
+            processing_completed_at: new Date().toISOString()
+          })
           .eq("video_id", videoId);
 
         return NextResponse.json({
-          captionsExtracted: captionsWithEmbeddings.length,
+          captionsExtracted: captions.length,
           success: true,
+          message: `Extracted ${captions.length} captions. Ready for embedding.`
         });
       }
 
-      throw new Error("No captions available");
+      throw new Error("No captions available for this video");
     } catch (err) {
+      console.error("Caption extraction error:", err);
+      
       await supabase
         .from("videos")
         .update({
@@ -91,14 +91,17 @@ export async function POST(request: NextRequest) {
         .eq("video_id", videoId);
 
       return NextResponse.json(
-        { error: "Failed to extract captions" },
+        { 
+          error: err instanceof Error ? err.message : "Failed to extract captions",
+          success: false
+        },
         { status: 500 }
       );
     }
   } catch (err) {
     console.error("API error:", err);
     return NextResponse.json(
-      { error: "Invalid request or server error" },
+      { error: "Invalid request or server error", success: false },
       { status: 500 }
     );
   }

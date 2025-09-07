@@ -151,7 +151,7 @@ export default function PersonaSettingsPage() {
 
       const result = await response.json();
       if (result.success) {
-        toast.success(`Extracted ${result.captionsExtracted} captions`);
+        toast.success(result.message || `Extracted ${result.captionsExtracted} captions`);
       } else {
         toast.error(result.message || 'No captions available');
       }
@@ -169,13 +169,52 @@ export default function PersonaSettingsPage() {
     }
   };
 
+  const processEmbeddings = async (videoId?: string) => {
+    if (!persona) return;
+
+    const processingKey = videoId || 'all';
+    setProcessingCaptions(prev => new Set(prev).add(processingKey));
+    
+    try {
+      const response = await fetch('/api/jobs/caption-embedding', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          personaId: persona.id,
+          ...(videoId && { videoId }),
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to process embeddings');
+      }
+
+      const result = await response.json();
+      if (result.success) {
+        toast.success(result.message || `Processed ${result.embeddingsProcessed} embeddings`);
+      } else {
+        toast.error(result.message || 'Failed to process embeddings');
+      }
+      
+      // Refresh the data
+      await fetchPersonaAndVideos();
+    } catch (error) {
+      toast.error('Failed to process embeddings');
+    } finally {
+      setProcessingCaptions(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(processingKey);
+        return newSet;
+      });
+    }
+  };
   const filteredAndSortedVideos = videos
     .filter(video => {
       switch (filterBy) {
         case 'processed':
           return video.captions_status === 'completed';
         case 'pending':
-          return video.captions_status === 'pending';
+          return video.captions_status === 'pending' || video.captions_status === 'extracted';
         case 'failed':
           return video.captions_status === 'failed';
         default:
@@ -241,6 +280,25 @@ export default function PersonaSettingsPage() {
               </h1>
               <p className="text-gray-600">@{persona.username}</p>
             </div>
+            {videos.some(v => v.captions_status === 'extracted') && (
+              <Button 
+                onClick={() => processEmbeddings()} 
+                disabled={processingCaptions.has('all')}
+                variant="outline"
+              >
+                {processingCaptions.has('all') ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Processing All...
+                  </>
+                ) : (
+                  <>
+                    <MessageSquare className="mr-2 h-4 w-4" />
+                    Process All Pending Captions
+                  </>
+                )}
+              </Button>
+            )}
           </div>
         </div>
 
@@ -348,13 +406,17 @@ export default function PersonaSettingsPage() {
                         {video.description}
                       </p>
                       <div className="flex items-center gap-4 text-xs text-gray-500">
+                        video.captions_status === 'extracted' ? 'secondary' :
+                        video.captions_status === 'processing' ? 'secondary' :
                         <span>{video.duration}</span>
                         <span>{video.view_count.toLocaleString()} views</span>
                         <span>{new Date(video.published_at).toLocaleDateString()}</span>
                       </div>
+                       video.captions_status === 'extracted' ? 'Ready for Embedding' :
+                       video.captions_status === 'processing' ? 'Extracting...' :
                     </div>
                     <div className="flex flex-col items-end gap-2">
-                      <Badge 
+                    {video.captions_status === 'pending' && (
                         variant={
                           video.captions_status === 'completed' ? 'default' :
                           video.captions_status === 'failed' ? 'destructive' : 'secondary'
@@ -373,7 +435,7 @@ export default function PersonaSettingsPage() {
                             <>
                               <Loader2 className="mr-2 h-3 w-3 animate-spin" />
                               Processing...
-                            </>
+                            Extracting...
                           ) : (
                             <>
                               <Play className="mr-2 h-3 w-3" />
@@ -383,6 +445,45 @@ export default function PersonaSettingsPage() {
                         </Button>
                       )}
                     </div>
+                    {video.captions_status === 'extracted' && (
+                      <Button
+                        size="sm"
+                        onClick={() => processEmbeddings(video.video_id)}
+                        disabled={processingCaptions.has(video.video_id)}
+                      >
+                        {processingCaptions.has(video.video_id) ? (
+                          <>
+                            <Loader2 className="mr-2 h-3 w-3 animate-spin" />
+                            Embedding...
+                          </>
+                        ) : (
+                          <>
+                            <MessageSquare className="mr-2 h-3 w-3" />
+                            Process Embeddings
+                          </>
+                        )}
+                      </Button>
+                    )}
+                    {video.captions_status === 'failed' && (
+                      <Button
+                        size="sm"
+                        onClick={() => extractCaptions(video.video_id)}
+                        disabled={processingCaptions.has(video.video_id)}
+                        variant="outline"
+                      >
+                        {processingCaptions.has(video.video_id) ? (
+                          <>
+                            <Loader2 className="mr-2 h-3 w-3 animate-spin" />
+                            Retrying...
+                          </>
+                        ) : (
+                          <>
+                            <Play className="mr-2 h-3 w-3" />
+                            Retry
+                          </>
+                        )}
+                      </Button>
+                    )}
                   </div>
                 ))}
               </div>

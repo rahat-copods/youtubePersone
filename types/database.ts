@@ -93,8 +93,10 @@ export interface Database {
           duration: string
           published_at: string
           view_count: number
-          captions_status: string
+          captions_status: 'pending' | 'processing' | 'extracted' | 'completed' | 'failed'
           captions_error: string | null
+          processing_started_at: string | null
+          processing_completed_at: string | null
           created_at: string
           updated_at: string
         }
@@ -108,8 +110,10 @@ export interface Database {
           duration?: string
           published_at: string
           view_count?: number
-          captions_status?: string
+          captions_status?: 'pending' | 'processing' | 'extracted' | 'completed' | 'failed'
           captions_error?: string | null
+          processing_started_at?: string | null
+          processing_completed_at?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -123,8 +127,10 @@ export interface Database {
           duration?: string
           published_at?: string
           view_count?: number
-          captions_status?: string
+          captions_status?: 'pending' | 'processing' | 'extracted' | 'completed' | 'failed'
           captions_error?: string | null
+          processing_started_at?: string | null
+          processing_completed_at?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -132,29 +138,32 @@ export interface Database {
       captions: {
         Row: {
           id: string
+          persona_id: string
           video_id: string
           start_time: string
           duration: string
           text: string
-          embedding: number[]
+          embedding: number[] | null
           created_at: string
         }
         Insert: {
           id?: string
+          persona_id: string
           video_id: string
           start_time: string
           duration: string
           text: string
-          embedding: number[]
+          embedding?: number[] | null
           created_at?: string
         }
         Update: {
           id?: string
+          persona_id?: string
           video_id?: string
           start_time?: string
           duration?: string
           text?: string
-          embedding?: number[]
+          embedding?: number[] | null
           created_at?: string
         }
       }
