@@ -136,10 +136,11 @@ CREATE TABLE IF NOT EXISTS videos (
 CREATE TABLE IF NOT EXISTS captions (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   video_id text REFERENCES videos(video_id) ON DELETE CASCADE,
+  persona_id uuid REFERENCES personas(id) ON DELETE CASCADE,
   start_time text NOT NULL,
   duration text NOT NULL,
   text text NOT NULL,
-  embedding vector(1536),
+  embedding vector(768),
   created_at timestamptz DEFAULT now()
 );
 

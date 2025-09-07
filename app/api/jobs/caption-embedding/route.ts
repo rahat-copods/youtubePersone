@@ -36,14 +36,14 @@ export async function POST(request: NextRequest) {
     if (fetchError) {
       throw new Error(`Failed to fetch captions: ${fetchError.message}`);
     }
-
+    console.log("Captions needing embeddings:", captions.length);
     if (!captions || captions.length === 0) {
       return NextResponse.json({
-        message: videoId 
+        message: videoId
           ? "No captions found for this video that need embedding"
           : "No captions found for this persona that need embedding",
         embeddingsProcessed: 0,
-        success: true
+        success: true,
       });
     }
 
@@ -53,11 +53,11 @@ export async function POST(request: NextRequest) {
     // Process captions in batches
     for (let i = 0; i < captions.length; i += batchSize) {
       const batch = captions.slice(i, i + batchSize);
-      
+
       const embeddingPromises = batch.map(async (caption) => {
         try {
           const embeddingResponse = await openai.embeddings.create({
-            model: "text-embedding-3-small",
+            model: "text-embedding-004",
             input: caption.text,
           });
 
@@ -70,13 +70,19 @@ export async function POST(request: NextRequest) {
             .eq("id", caption.id);
 
           if (updateError) {
-            console.error(`Failed to update caption ${caption.id}:`, updateError);
+            console.error(
+              `Failed to update caption ${caption.id}:`,
+              updateError
+            );
             return false;
           }
 
           return true;
         } catch (error) {
-          console.error(`Failed to generate embedding for caption ${caption.id}:`, error);
+          console.error(
+            `Failed to generate embedding for caption ${caption.id}:`,
+            error
+          );
           return false;
         }
       });
@@ -107,17 +113,17 @@ export async function POST(request: NextRequest) {
       embeddingsProcessed: processedCount,
       totalCaptions: captions.length,
       success: true,
-      message: videoId 
+      message: videoId
         ? `Processed ${processedCount} embeddings for video`
-        : `Processed ${processedCount} embeddings for persona`
+        : `Processed ${processedCount} embeddings for persona`,
     });
-
   } catch (err) {
     console.error("Caption embedding error:", err);
     return NextResponse.json(
-      { 
-        error: err instanceof Error ? err.message : "Failed to process embeddings",
-        success: false
+      {
+        error:
+          err instanceof Error ? err.message : "Failed to process embeddings",
+        success: false,
       },
       { status: 500 }
     );
