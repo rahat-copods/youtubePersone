@@ -49,7 +49,7 @@ export async function POST(request: NextRequest) {
         for (const caption of captions) {
           try {
             const embedding = await openai.embeddings.create({
-              model: "text-embedding-005",
+              model: "text-embedding-004",
               input: caption.text,
             });
 
