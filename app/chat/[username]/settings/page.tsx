@@ -208,6 +208,7 @@ export default function PersonaSettingsPage() {
       });
     }
   };
+  
   const filteredAndSortedVideos = videos
     .filter(video => {
       switch (filterBy) {
@@ -406,26 +407,26 @@ export default function PersonaSettingsPage() {
                         {video.description}
                       </p>
                       <div className="flex items-center gap-4 text-xs text-gray-500">
-                        video.captions_status === 'extracted' ? 'secondary' :
-                        video.captions_status === 'processing' ? 'secondary' :
                         <span>{video.duration}</span>
                         <span>{video.view_count.toLocaleString()} views</span>
                         <span>{new Date(video.published_at).toLocaleDateString()}</span>
                       </div>
-                       video.captions_status === 'extracted' ? 'Ready for Embedding' :
-                       video.captions_status === 'processing' ? 'Extracting...' :
                     </div>
                     <div className="flex flex-col items-end gap-2">
-                    {video.captions_status === 'pending' && (
+                      <Badge
                         variant={
                           video.captions_status === 'completed' ? 'default' :
-                          video.captions_status === 'failed' ? 'destructive' : 'secondary'
+                          video.captions_status === 'failed' ? 'destructive' :
+                          video.captions_status === 'extracted' ? 'secondary' :
+                          video.captions_status === 'processing' ? 'secondary' : 'secondary'
                         }
                       >
                         {video.captions_status === 'completed' ? 'Processed' :
-                         video.captions_status === 'failed' ? 'Failed' : 'Pending'}
+                         video.captions_status === 'failed' ? 'Failed' :
+                         video.captions_status === 'extracted' ? 'Ready for Embedding' :
+                         video.captions_status === 'processing' ? 'Extracting...' : 'Pending'}
                       </Badge>
-                      {video.captions_status !== 'completed' && (
+                      {video.captions_status === 'pending' && (
                         <Button
                           size="sm"
                           onClick={() => extractCaptions(video.video_id)}
@@ -434,8 +435,8 @@ export default function PersonaSettingsPage() {
                           {processingCaptions.has(video.video_id) ? (
                             <>
                               <Loader2 className="mr-2 h-3 w-3 animate-spin" />
-                              Processing...
-                            Extracting...
+                              Extracting...
+                            </>
                           ) : (
                             <>
                               <Play className="mr-2 h-3 w-3" />
@@ -444,46 +445,46 @@ export default function PersonaSettingsPage() {
                           )}
                         </Button>
                       )}
+                      {video.captions_status === 'extracted' && (
+                        <Button
+                          size="sm"
+                          onClick={() => processEmbeddings(video.video_id)}
+                          disabled={processingCaptions.has(video.video_id)}
+                        >
+                          {processingCaptions.has(video.video_id) ? (
+                            <>
+                              <Loader2 className="mr-2 h-3 w-3 animate-spin" />
+                              Embedding...
+                            </>
+                          ) : (
+                            <>
+                              <MessageSquare className="mr-2 h-3 w-3" />
+                              Process Embeddings
+                            </>
+                          )}
+                        </Button>
+                      )}
+                      {video.captions_status === 'failed' && (
+                        <Button
+                          size="sm"
+                          onClick={() => extractCaptions(video.video_id)}
+                          disabled={processingCaptions.has(video.video_id)}
+                          variant="outline"
+                        >
+                          {processingCaptions.has(video.video_id) ? (
+                            <>
+                              <Loader2 className="mr-2 h-3 w-3 animate-spin" />
+                              Retrying...
+                            </>
+                          ) : (
+                            <>
+                              <Play className="mr-2 h-3 w-3" />
+                              Retry
+                            </>
+                          )}
+                        </Button>
+                      )}
                     </div>
-                    {video.captions_status === 'extracted' && (
-                      <Button
-                        size="sm"
-                        onClick={() => processEmbeddings(video.video_id)}
-                        disabled={processingCaptions.has(video.video_id)}
-                      >
-                        {processingCaptions.has(video.video_id) ? (
-                          <>
-                            <Loader2 className="mr-2 h-3 w-3 animate-spin" />
-                            Embedding...
-                          </>
-                        ) : (
-                          <>
-                            <MessageSquare className="mr-2 h-3 w-3" />
-                            Process Embeddings
-                          </>
-                        )}
-                      </Button>
-                    )}
-                    {video.captions_status === 'failed' && (
-                      <Button
-                        size="sm"
-                        onClick={() => extractCaptions(video.video_id)}
-                        disabled={processingCaptions.has(video.video_id)}
-                        variant="outline"
-                      >
-                        {processingCaptions.has(video.video_id) ? (
-                          <>
-                            <Loader2 className="mr-2 h-3 w-3 animate-spin" />
-                            Retrying...
-                          </>
-                        ) : (
-                          <>
-                            <Play className="mr-2 h-3 w-3" />
-                            Retry
-                          </>
-                        )}
-                      </Button>
-                    )}
                   </div>
                 ))}
               </div>
