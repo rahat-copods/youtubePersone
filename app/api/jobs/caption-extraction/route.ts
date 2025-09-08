@@ -5,18 +5,16 @@ import {
   fetchApifyResults,
 } from "@/lib/apify/caption-extraction";
 import { z } from "zod";
-import { ensurePineconeIndex } from "@/lib/pinecone/createIndex";
 
 const requestSchema = z.object({
   videoId: z.string(),
   personaId: z.string(),
-  channelId: z.string(),
 });
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { videoId, personaId, channelId } = requestSchema.parse(body);
+    const { videoId, personaId } = requestSchema.parse(body);
     const supabase = serviceClient;
 
     // Get video row (check runId first)
@@ -46,8 +44,6 @@ export async function POST(request: NextRequest) {
       const captions = await fetchApifyResults(runId);
 
       if (captions.length > 0) {
-        // create PeronaIndex in Pinecone
-        await ensurePineconeIndex(channelId);
         // Store captions with persona_id and null embeddings
         const captionsToInsert = captions.map((caption) => ({
           video_id: videoId,
@@ -66,14 +62,15 @@ export async function POST(request: NextRequest) {
         }
 
         // Update video status to 'extracted' (captions available but not embedded)
-        await supabase
+        const { data } = await supabase
           .from("videos")
           .update({
             captions_status: "extracted",
             processing_completed_at: new Date().toISOString(),
           })
-          .eq("video_id", videoId);
-
+          .eq("video_id", videoId)
+          .select();
+        console.log("completed", data, videoId);
         return NextResponse.json({
           captionsExtracted: captions.length,
           success: true,

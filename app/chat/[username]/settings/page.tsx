@@ -159,7 +159,6 @@ export default function PersonaSettingsPage() {
         body: JSON.stringify({
           videoId,
           personaId: persona.id,
-          channelId: persona.channel_id,
         }),
       });
 

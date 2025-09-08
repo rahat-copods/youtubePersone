@@ -1,10 +1,6 @@
 import { z } from "zod";
-
-export interface CaptionSegment {
-  start: string;
-  duration: string;
-  text: string;
-}
+import { parseWebVTTForEmbeddings } from "../youtube/parseCaption";
+import { CaptionSegment } from "@/types";
 
 const APIFY_ACTOR_ID = "h7sDV53CddomktSi5";
 const apifyToken = process.env.APIFY_API_TOKEN!;
@@ -60,7 +56,7 @@ export async function fetchApifyResults(
       const results = await resultsRes.json();
 
       if (results.length > 0 && results[0].subtitles) {
-        return parseVttToCaptions(results[0].subtitles[0].vtt);
+        return parseWebVTTForEmbeddings(results[0].subtitles[0].vtt);
       }
       return [];
     } else if (status === "FAILED" || status === "ABORTED") {
@@ -71,58 +67,4 @@ export async function fetchApifyResults(
   }
 
   throw new Error("Caption extraction timed out");
-}
-
-function parseVttToCaptions(vttContent: string): CaptionSegment[] {
-  console.log("Parsing VTT content", vttContent);
-  const captions: CaptionSegment[] = [];
-  const lines = vttContent.split("\n");
-
-  let i = 0;
-  while (i < lines.length) {
-    const line = lines[i].trim();
-
-    // Look for timestamp line (format: 00:00:00.000 --> 00:00:03.000)
-    if (line.includes("-->")) {
-      const [startTime, endTime] = line.split(" --> ");
-      const startSeconds = timeToSeconds(startTime);
-      const endSeconds = timeToSeconds(endTime);
-      const duration = (endSeconds - startSeconds).toString();
-
-      // Get caption text (next non-empty lines)
-      const textLines: string[] = [];
-      i++;
-      while (i < lines.length && lines[i].trim() !== "") {
-        const textLine = lines[i].trim();
-        if (textLine && !textLine.includes("-->")) {
-          // Remove VTT styling tags
-          const cleanText = textLine.replace(/<[^>]*>/g, "");
-          if (cleanText) {
-            textLines.push(cleanText);
-          }
-        }
-        i++;
-      }
-
-      if (textLines.length > 0) {
-        captions.push({
-          start: Math.floor(startSeconds).toString(),
-          duration,
-          text: textLines.join(" "),
-        });
-      }
-    }
-    i++;
-  }
-  console.log("Parsed captions:", captions);
-  return captions;
-}
-
-function timeToSeconds(timeString: string): number {
-  const parts = timeString.split(":");
-  const hours = parseInt(parts[0] || "0");
-  const minutes = parseInt(parts[1] || "0");
-  const seconds = parseFloat(parts[2] || "0");
-
-  return hours * 3600 + minutes * 60 + seconds;
 }
