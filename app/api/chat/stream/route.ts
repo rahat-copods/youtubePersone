@@ -189,7 +189,7 @@ Respond as the channel creator would, using their knowledge, style, and perspect
 
 async function getEmbedding(text: string): Promise<number[]> {
   const response = await openai.embeddings.create({
-    model: "text-embedding-004",
+    model: "gemini-embedding-001",
     input: text,
   });
   return response.data[0].embedding;
