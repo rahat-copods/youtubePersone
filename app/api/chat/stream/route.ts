@@ -2,11 +2,13 @@ import { NextRequest } from "next/server";
 import { createClient, serviceClient } from "@/lib/supabase/server";
 import { OpenAI } from "openai";
 import { z } from "zod";
+import { Pinecone } from "@pinecone-database/pinecone";
 
 const requestSchema = z.object({
   personaId: z.string(),
   message: z.string(),
-  userId: z.string().optional(),
+  userId: z.string(),
+  channelId: z.string(),
 });
 
 const openai = new OpenAI({
@@ -14,10 +16,14 @@ const openai = new OpenAI({
   baseURL: process.env.OPENAI_API_BASE_URL,
 });
 
+const pinecone = new Pinecone({
+  apiKey: process.env.PINECONE_API_KEY!,
+});
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { personaId, message, userId } = requestSchema.parse(body);
+    const { personaId, message, userId, channelId } = requestSchema.parse(body);
 
     const supabase = serviceClient;
 
@@ -32,41 +38,50 @@ export async function POST(request: NextRequest) {
       return new Response("Persona not found", { status: 404 });
     }
 
-    // Perform vector search for relevant captions
+    // Perform vector search using Pinecone
     const queryEmbedding = await getEmbedding(message);
-    const { data: captions, error: captionsError } = await supabase.rpc(
-      "match_captions",
-      {
-        query_embedding: queryEmbedding,
-        persona_id: personaId,
-        match_threshold: 0.7,
-        match_count: 5,
-      }
-    );
+    const index = pinecone.index(channelId.toLowerCase());
+    const searchResults = await index.query({
+      vector: queryEmbedding,
+      topK: 10,
+      includeMetadata: true,
+    });
 
+    // Extract relevant context from Pinecone results
     const relevantContext =
-      captions?.map((caption: any) => ({
-        text: caption.text,
-        video_id: caption.video_id,
-        video_title: caption.video_title,
-        timestamp: caption.start_time,
-      })) || [];
+      searchResults.matches
+        ?.filter((match) => match.score && match.score > 0.5) // Filter by similarity threshold
+        .map((match) => ({
+          text: match.metadata?.text,
+          video_id: match.metadata?.video_id,
+          start: match.metadata?.start,
+          video_title:
+            match.metadata?.video_title || `Video ${match.metadata?.video_id}`,
+          timestamp: match.metadata?.start_time || 0,
+          confidence: match.score,
+        })) || [];
+
+    // If no good matches from Pinecone, get video titles from Supabase for context
+    if (relevantContext.length > 0) {
+      const videoIds = [...new Set(relevantContext.map((ctx) => ctx.video_id))];
+      const { data: videos } = await supabase
+        .from("videos")
+        .select("video_id, title")
+        .in("video_id", videoIds);
+      // Update context with proper video titles
+      relevantContext.forEach((ctx) => {
+        const video = videos?.find((v) => v.video_id === ctx.video_id);
+        if (video) {
+          ctx.video_title = video.title;
+        }
+      });
+    }
 
     // Create readable stream
     const encoder = new TextEncoder();
     const stream = new ReadableStream({
       async start(controller) {
         try {
-          // Save user message
-          if (userId) {
-            await supabase.from("messages").insert({
-              persona_id: personaId,
-              user_id: userId,
-              role: "user",
-              content: message,
-            });
-          }
-
           // Generate AI response
           const systemPrompt = `You are ${
             persona.title
@@ -129,7 +144,13 @@ Respond as the channel creator would, using their knowledge, style, and perspect
               )
             );
           }
-
+          // Save user message
+          await supabase.from("messages").insert({
+            persona_id: personaId,
+            user_id: userId,
+            role: "user",
+            content: message,
+          });
           // Save assistant message
           let messageId = null;
           if (userId) {

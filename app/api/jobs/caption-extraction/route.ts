@@ -44,6 +44,37 @@ export async function POST(request: NextRequest) {
       const captions = await fetchApifyResults(runId);
 
       if (captions.length > 0) {
+        // Check existing captions for this video
+        const { data: existingCaptions, error: fetchError } = await supabase
+          .from("captions")
+          .select("*")
+          .eq("video_id", videoId);
+        if (fetchError) {
+          console.error("Error fetching existing captions:", fetchError);
+          throw new Error(
+            `Failed to fetch existing captions: ${fetchError.message}`
+          );
+        }
+
+        // Compare lengths - if they match, skip processing
+        if (existingCaptions && existingCaptions.length === captions.length) {
+          console.log("Captions already exist with same length, skipping...");
+          throw new Error(`Failed to insert captions: Captions already exist`);
+        }
+        // If lengths don't match, delete existing captions and insert new ones
+        if (existingCaptions && existingCaptions.length > 0) {
+          const { error: deleteError } = await supabase
+            .from("captions")
+            .delete()
+            .eq("video_id", videoId);
+
+          if (deleteError) {
+            console.error("Error deleting existing captions:", deleteError);
+            throw new Error(
+              `Failed to fetch existing captions: ${deleteError.message}`
+            );
+          }
+        }
         // Store captions with persona_id and null embeddings
         const captionsToInsert = captions.map((caption) => ({
           video_id: videoId,
@@ -62,15 +93,21 @@ export async function POST(request: NextRequest) {
         }
 
         // Update video status to 'extracted' (captions available but not embedded)
-        const { data } = await supabase
+        const { data: updateData, error: updateError } = await supabase
           .from("videos")
           .update({
             captions_status: "extracted",
-            processing_completed_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
           })
           .eq("video_id", videoId)
           .select();
-        console.log("completed", data, videoId);
+        if (updateError) {
+          console.error("Error updating video status:", updateError);
+          throw new Error(
+            `Failed to update video status: ${updateError.message}`
+          );
+        }
+
         return NextResponse.json({
           captionsExtracted: captions.length,
           success: true,

@@ -1,15 +1,15 @@
-'use client';
+"use client";
 
-import { useState, useRef, useEffect } from 'react';
-import { createClient } from '@/lib/supabase/client';
-import { useAuth } from '@/components/providers/auth-provider';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Card, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Send, Loader2, ExternalLink, User, Bot } from 'lucide-react';
-import toast from 'react-hot-toast';
+import { useState, useRef, useEffect } from "react";
+import { createClient } from "@/lib/supabase/client";
+import { useAuth } from "@/components/providers/auth-provider";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Send, Loader2, ExternalLink, User, Bot } from "lucide-react";
+import toast from "react-hot-toast";
 
 interface Persona {
   id: string;
@@ -18,11 +18,12 @@ interface Persona {
   description: string;
   thumbnail_url: string;
   discovery_status: string;
+  channel_id: string;
 }
 
 interface Message {
   id?: string;
-  role: 'user' | 'assistant';
+  role: "user" | "assistant";
   content: string;
   video_references?: VideoReference[];
   created_at?: string;
@@ -42,7 +43,7 @@ interface ChatInterfaceProps {
 export function ChatInterface({ persona }: ChatInterfaceProps) {
   const { user } = useAuth();
   const [messages, setMessages] = useState<Message[]>([]);
-  const [input, setInput] = useState('');
+  const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isStreaming, setIsStreaming] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -57,7 +58,7 @@ export function ChatInterface({ persona }: ChatInterfaceProps) {
   }, [messages]);
 
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
   const loadChatHistory = async () => {
@@ -65,11 +66,11 @@ export function ChatInterface({ persona }: ChatInterfaceProps) {
 
     const supabase = createClient();
     const { data, error } = await supabase
-      .from('messages')
-      .select('*')
-      .eq('persona_id', persona.id)
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: true });
+      .from("messages")
+      .select("*")
+      .eq("persona_id", persona.id)
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: true });
 
     if (!error && data) {
       setMessages(data);
@@ -83,24 +84,26 @@ export function ChatInterface({ persona }: ChatInterfaceProps) {
     // Check if persona has any videos with completed captions
     const supabase = createClient();
     const { data: completedVideos } = await supabase
-      .from('videos')
-      .select('id')
-      .eq('persona_id', persona.id)
-      .eq('captions_status', 'completed')
+      .from("videos")
+      .select("id")
+      .eq("persona_id", persona.id)
+      .eq("captions_status", "completed")
       .limit(1);
 
     if (!completedVideos || completedVideos.length === 0) {
-      toast.error('This persona needs videos with processed captions before you can chat. Please go to settings to process some videos.');
+      toast.error(
+        "This persona needs videos with processed captions before you can chat. Please go to settings to process some videos."
+      );
       return;
     }
 
     const userMessage: Message = {
-      role: 'user',
+      role: "user",
       content: input.trim(),
     };
 
-    setMessages(prev => [...prev, userMessage]);
-    setInput('');
+    setMessages((prev) => [...prev, userMessage]);
+    setInput("");
     setIsLoading(true);
     setIsStreaming(true);
 
@@ -108,85 +111,87 @@ export function ChatInterface({ persona }: ChatInterfaceProps) {
     abortControllerRef.current = new AbortController();
 
     try {
-      const response = await fetch('/api/chat/stream', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      console.log(persona);
+      const response = await fetch("/api/chat/stream", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           personaId: persona.id,
           message: userMessage.content,
+          channelId: persona.channel_id,
           userId: user?.id,
         }),
         signal: abortControllerRef.current.signal,
       });
 
       if (!response.ok) {
-        throw new Error('Failed to get response');
+        throw new Error("Failed to get response");
       }
 
       const reader = response.body?.getReader();
-      if (!reader) throw new Error('No response body');
+      if (!reader) throw new Error("No response body");
 
       let assistantMessage: Message = {
-        role: 'assistant',
-        content: '',
+        role: "assistant",
+        content: "",
       };
 
-      setMessages(prev => [...prev, assistantMessage]);
+      setMessages((prev) => [...prev, assistantMessage]);
 
       const decoder = new TextDecoder();
-      let buffer = '';
+      let buffer = "";
 
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
 
         buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
 
         for (const line of lines) {
-          if (line.startsWith('data: ')) {
+          if (line.startsWith("data: ")) {
             try {
               const data = JSON.parse(line.slice(6));
-              
-              if (data.type === 'content') {
+
+              if (data.type === "content") {
                 assistantMessage.content += data.content;
-                setMessages(prev => {
+                setMessages((prev) => {
                   const newMessages = [...prev];
                   newMessages[newMessages.length - 1] = { ...assistantMessage };
                   return newMessages;
                 });
-              } else if (data.type === 'references') {
+              } else if (data.type === "references") {
                 assistantMessage.video_references = data.references;
-                setMessages(prev => {
+                setMessages((prev) => {
                   const newMessages = [...prev];
                   newMessages[newMessages.length - 1] = { ...assistantMessage };
                   return newMessages;
                 });
-              } else if (data.type === 'complete') {
+              } else if (data.type === "complete") {
                 assistantMessage.id = data.messageId;
-                setMessages(prev => {
+                setMessages((prev) => {
                   const newMessages = [...prev];
                   newMessages[newMessages.length - 1] = { ...assistantMessage };
                   return newMessages;
                 });
-              } else if (data.type === 'error') {
+              } else if (data.type === "error") {
                 throw new Error(data.error);
               }
             } catch (parseError) {
-              console.error('Error parsing SSE data:', parseError);
+              console.error("Error parsing SSE data:", parseError);
             }
           }
         }
       }
     } catch (error: any) {
-      if (error.name === 'AbortError') {
-        toast.error('Request cancelled');
+      if (error.name === "AbortError") {
+        toast.error("Request cancelled");
       } else {
-        console.error('Chat error:', error);
-        toast.error('Failed to get response');
+        console.error("Chat error:", error);
+        toast.error("Failed to get response");
         // Remove the assistant message if there was an error
-        setMessages(prev => prev.slice(0, -1));
+        setMessages((prev) => prev.slice(0, -1));
       }
     } finally {
       setIsLoading(false);
@@ -216,10 +221,16 @@ export function ChatInterface({ persona }: ChatInterfaceProps) {
             <p className="text-sm text-muted-foreground">@{persona.username}</p>
           </div>
           <div className="ml-auto">
-            <Badge 
-              variant={persona.discovery_status === 'completed' ? 'default' : 'secondary'}
+            <Badge
+              variant={
+                persona.discovery_status === "completed"
+                  ? "default"
+                  : "secondary"
+              }
             >
-              {persona.discovery_status === 'completed' ? 'Ready' : 'Processing'}
+              {persona.discovery_status === "completed"
+                ? "Ready"
+                : "Processing"}
             </Badge>
           </div>
         </div>
@@ -233,67 +244,109 @@ export function ChatInterface({ persona }: ChatInterfaceProps) {
               <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-r from-purple-100 to-teal-100 flex items-center justify-center">
                 <Bot className="w-8 h-8 text-purple-600" />
               </div>
-              <h3 className="text-lg font-semibold mb-2">Start a conversation</h3>
+              <h3 className="text-lg font-semibold mb-2">
+                Start a conversation
+              </h3>
               <p className="text-muted-foreground">
                 Ask me anything about {persona.title}'s content!
               </p>
             </div>
           ) : (
             messages.map((message, index) => (
-              <div key={index} className={`flex gap-3 ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                <div className={`flex gap-3 max-w-[80%] ${message.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
-                    message.role === 'user' 
-                      ? 'bg-purple-100 text-purple-600' 
-                      : 'bg-teal-100 text-teal-600'
-                  }`}>
-                    {message.role === 'user' ? <User className="w-4 h-4" /> : <Bot className="w-4 h-4" />}
+              <div
+                key={index}
+                className={`flex gap-3 ${
+                  message.role === "user" ? "justify-end" : "justify-start"
+                }`}
+              >
+                <div
+                  className={`flex gap-3 max-w-[80%] ${
+                    message.role === "user" ? "flex-row-reverse" : "flex-row"
+                  }`}
+                >
+                  <div
+                    className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
+                      message.role === "user"
+                        ? "bg-purple-100 text-purple-600"
+                        : "bg-teal-100 text-teal-600"
+                    }`}
+                  >
+                    {message.role === "user" ? (
+                      <User className="w-4 h-4" />
+                    ) : (
+                      <Bot className="w-4 h-4" />
+                    )}
                   </div>
-                  
-                  <div className={`space-y-2 ${message.role === 'user' ? 'text-right' : 'text-left'}`}>
-                    <Card className={message.role === 'user' ? 'bg-purple-50 border-purple-200' : 'bg-white'}>
+
+                  <div
+                    className={`space-y-2 ${
+                      message.role === "user" ? "text-right" : "text-left"
+                    }`}
+                  >
+                    <Card
+                      className={
+                        message.role === "user"
+                          ? "bg-purple-50 border-purple-200"
+                          : "bg-white"
+                      }
+                    >
                       <CardContent className="p-3">
                         <div className="prose prose-sm max-w-none">
-                          {message.content.split('\n').map((line, i) => (
-                            <p key={i} className="mb-2 last:mb-0">{line}</p>
+                          {message.content.split("\n").map((line, i) => (
+                            <p key={i} className="mb-2 last:mb-0">
+                              {line}
+                            </p>
                           ))}
                         </div>
                       </CardContent>
                     </Card>
-                    
-                    {message.video_references && message.video_references.length > 0 && (
-                      <div className="space-y-2">
-                        <p className="text-xs text-muted-foreground">Referenced videos:</p>
-                        {message.video_references.map((ref, refIndex) => (
-                          <Card key={refIndex} className="bg-gray-50 border-gray-200">
-                            <CardContent className="p-2">
-                              <div className="flex items-center justify-between">
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-xs font-medium truncate">{ref.title}</p>
-                                  <p className="text-xs text-muted-foreground">
-                                    Timestamp: {ref.timestamp}s
-                                  </p>
+
+                    {message.video_references &&
+                      message.video_references.length > 0 && (
+                        <div className="space-y-2">
+                          <p className="text-xs text-muted-foreground">
+                            Referenced videos:
+                          </p>
+                          {message.video_references.map((ref, refIndex) => (
+                            <Card
+                              key={refIndex}
+                              className="bg-gray-50 border-gray-200"
+                            >
+                              <CardContent className="p-2">
+                                <div className="flex items-center justify-between">
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-xs font-medium truncate">
+                                      {ref.title}
+                                    </p>
+                                    <p className="text-xs text-muted-foreground">
+                                      Timestamp: {ref.timestamp}s
+                                    </p>
+                                  </div>
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="ml-2 h-6 w-6 p-0"
+                                    onClick={() =>
+                                      window.open(
+                                        `https://youtube.com/watch?v=${ref.video_id}&t=${ref.timestamp}`,
+                                        "_blank"
+                                      )
+                                    }
+                                  >
+                                    <ExternalLink className="h-3 w-3" />
+                                  </Button>
                                 </div>
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  className="ml-2 h-6 w-6 p-0"
-                                  onClick={() => window.open(`https://youtube.com/watch?v=${ref.video_id}&t=${ref.timestamp}`, '_blank')}
-                                >
-                                  <ExternalLink className="h-3 w-3" />
-                                </Button>
-                              </div>
-                            </CardContent>
-                          </Card>
-                        ))}
-                      </div>
-                    )}
+                              </CardContent>
+                            </Card>
+                          ))}
+                        </div>
+                      )}
                   </div>
                 </div>
               </div>
             ))
           )}
-          
+
           {isStreaming && (
             <div className="flex gap-3 justify-start">
               <div className="flex gap-3 max-w-[80%]">
@@ -304,14 +357,16 @@ export function ChatInterface({ persona }: ChatInterfaceProps) {
                   <CardContent className="p-3">
                     <div className="flex items-center gap-2">
                       <Loader2 className="w-4 h-4 animate-spin" />
-                      <span className="text-sm text-muted-foreground">Thinking...</span>
+                      <span className="text-sm text-muted-foreground">
+                        Thinking...
+                      </span>
                     </div>
                   </CardContent>
                 </Card>
               </div>
             </div>
           )}
-          
+
           <div ref={messagesEndRef} />
         </div>
       </ScrollArea>
@@ -324,9 +379,9 @@ export function ChatInterface({ persona }: ChatInterfaceProps) {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               placeholder={
-                persona.discovery_status === 'completed' 
+                persona.discovery_status === "completed"
                   ? `Ask ${persona.title} anything...`
-                  : 'Persona is still processing...'
+                  : "Persona is still processing..."
               }
               disabled={isLoading}
               className="flex-1"

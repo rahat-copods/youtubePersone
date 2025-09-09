@@ -31,7 +31,7 @@ export async function POST(request: NextRequest) {
     // Build query to find captions that need embedding (limit to 100)
     let query = supabase
       .from("captions")
-      .select("id, text, video_id")
+      .select("id, text, video_id, start_time")
       .eq("persona_id", personaId)
       .eq("embedding", false)
       .limit(100);
@@ -84,6 +84,7 @@ export async function POST(request: NextRequest) {
               metadata: {
                 text: caption.text,
                 video_id: caption.video_id,
+                start: caption.start_time,
                 persona_id: personaId,
               },
             },
@@ -148,8 +149,8 @@ export async function POST(request: NextRequest) {
       totalCaptions: captions.length,
       success: true,
       message: videoId
-        ? `Processed ${processedCount} embeddings for video (stored in Pinecone index: ${personaId})`
-        : `Processed ${processedCount} embeddings for persona (stored in Pinecone index: ${personaId})`,
+        ? `Processed ${processedCount} embeddings for video and stored`
+        : `Processed ${processedCount} embeddings for persona and stored)`,
     });
   } catch (err) {
     console.error("Caption embedding error:", err);
