@@ -1,11 +1,12 @@
 BY BOLT
 
-- Configure CHAT persona INPUT settings with topK and similarityFilter: small settingButton in chat that allows user match this. and pass this values on backend and use them. set default to 0.5 similar and 0.1 topk
-- Implement pagination for videos on the settings page.
-- PROCESS_EMBEDDING button: processes 100 videos at a time and displays progress of how many captions processed.
-- Make CHAT support multiple instances per persona (instead of one), and display them in the sidebar.
+- the Videos Discovered inditaior or setting page should fetch the total video count from db rather than filter the recived data
+- create persona should also take the supabase credentials too store captions and pinecone details to store emmbeddings and store it with persona table encrypted with assymetric way and in the backend should first look for credentials from persona table if not exists then use for env credentials
+- add user setting where user can add there apify token and AI model credentials the APIKEY and model(include gemini based grok based openai based models for now user can select and provide apikey)
+- message session title should be the first user message and also make it editable if user wants to edit title
 
 BY USER
 
 - Update migration file
 - storage flow: user sends message to backend backend streams reponse and once done backend store user and chat message in db
+- check cron jobs
