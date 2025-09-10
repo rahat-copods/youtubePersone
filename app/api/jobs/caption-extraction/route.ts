@@ -35,7 +35,7 @@ export async function POST(request: NextRequest) {
         .update({
           apify_runid: runId,
           captions_status: "processing",
-          processing_started_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
         })
         .eq("video_id", videoId);
     }
