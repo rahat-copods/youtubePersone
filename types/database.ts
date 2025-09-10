@@ -167,11 +167,38 @@ export interface Database {
           created_at?: string
         }
       }
+      chat_sessions: {
+        Row: {
+          id: string
+          persona_id: string
+          user_id: string | null
+          title: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          persona_id: string
+          user_id?: string | null
+          title: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          persona_id?: string
+          user_id?: string | null
+          title?: string
+          created_at?: string
+          updated_at?: string
+        }
+      }
       messages: {
         Row: {
           id: string
           persona_id: string
           user_id: string | null
+          chat_session_id: string | null
           role: string
           content: string
           video_references: Json | null
@@ -181,6 +208,7 @@ export interface Database {
           id?: string
           persona_id: string
           user_id?: string | null
+          chat_session_id?: string | null
           role: string
           content: string
           video_references?: Json | null
@@ -190,6 +218,7 @@ export interface Database {
           id?: string
           persona_id?: string
           user_id?: string | null
+          chat_session_id?: string | null
           role?: string
           content?: string
           video_references?: Json | null

@@ -147,6 +147,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       embeddingsProcessed: processedCount,
       totalCaptions: captions.length,
+      totalCaptionsFetched: captions.length,
       success: true,
       message: videoId
         ? `Processed ${processedCount} embeddings for video and stored`

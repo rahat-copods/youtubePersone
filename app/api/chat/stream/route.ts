@@ -10,6 +10,9 @@ const requestSchema = z.object({
   message: z.string(),
   userId: z.string(),
   channelId: z.string(),
+  topK: z.number().optional().default(10),
+  similarityFilter: z.number().optional().default(0.5),
+  chatSessionId: z.string().optional(),
 });
 
 const openai = new OpenAI({
@@ -22,10 +25,9 @@ const pinecone = new Pinecone({
 });
 
 export async function POST(request: NextRequest) {
-  const SIMILARITY_THRESHOLD = 0.5;
   try {
     const body = await request.json();
-    const { personaId, message, userId, channelId } = requestSchema.parse(body);
+    const { personaId, message, userId, channelId, topK, similarityFilter, chatSessionId } = requestSchema.parse(body);
 
     const supabase = serviceClient;
 
@@ -45,14 +47,14 @@ export async function POST(request: NextRequest) {
     const index = pinecone.index(channelId.toLowerCase());
     const searchResults = await index.query({
       vector: queryEmbedding,
-      topK: 10,
+      topK: topK,
       includeMetadata: true,
     });
 
     // Extract relevant context from Pinecone results
     const relevantContext =
       searchResults.matches
-        ?.filter((match) => match.score && match.score > SIMILARITY_THRESHOLD) // Filter by similarity threshold
+        ?.filter((match) => match.score && match.score > similarityFilter) // Filter by similarity threshold
         .map((match) => ({
           text: match.metadata?.text,
           video_id: match.metadata?.video_id,
@@ -148,25 +150,52 @@ Respond as the channel creator would, using their knowledge, style, and perspect
               )
             );
           }
-          // Save user message
-          await supabase.from("messages").insert({
-            persona_id: personaId,
-            user_id: userId,
-            role: "user",
-            content: message,
-          });
-          // Save assistant message
-          let messageId = null;
-          if (userId) {
-            const { data: savedMessage } = await supabase
-              .from("messages")
+          
+          // Handle chat session
+          let sessionId = chatSessionId;
+          if (!sessionId && userId) {
+            // Create new chat session
+            const { data: newSession } = await supabase
+              .from("chat_sessions")
               .insert({
                 persona_id: personaId,
                 user_id: userId,
-                role: "assistant",
-                content: accumulatedContent,
-                video_references: references.length > 0 ? references : null,
+                title: `Chat with ${persona.title} - ${new Date().toLocaleDateString()}`,
               })
+              .select("id")
+              .single();
+            
+            sessionId = newSession?.id;
+          }
+
+          // Save user message
+          const userMessageData: any = {
+            persona_id: personaId,
+            role: "user",
+            content: message,
+          };
+          
+          if (userId) userMessageData.user_id = userId;
+          if (sessionId) userMessageData.chat_session_id = sessionId;
+          
+          await supabase.from("messages").insert(userMessageData);
+          
+          // Save assistant message
+          let messageId = null;
+          if (userId) {
+            const assistantMessageData: any = {
+              persona_id: personaId,
+              user_id: userId,
+              role: "assistant",
+              content: accumulatedContent,
+              video_references: references.length > 0 ? references : null,
+            };
+            
+            if (sessionId) assistantMessageData.chat_session_id = sessionId;
+            
+            const { data: savedMessage } = await supabase
+              .from("messages")
+              .insert(assistantMessageData)
               .select("id")
               .single();
 
@@ -179,6 +208,7 @@ Respond as the channel creator would, using their knowledge, style, and perspect
               `data: ${JSON.stringify({
                 type: "complete",
                 messageId,
+                chatSessionId: sessionId,
               })}\n\n`
             )
           );

@@ -22,11 +22,11 @@ interface Persona {
   channel_id: string;
 }
 
-export default function ChatPage() {
+export default function ChatSessionPage() {
   const params = useParams();
   const { user } = useAuth();
   const username = params.username as string;
-  const chatSessionId = params.chatSessionId as string | undefined;
+  const chatSessionId = params.chatSessionId as string;
   const [persona, setPersona] = useState<Persona | null>(null);
   const [loading, setLoading] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(false);

@@ -9,6 +9,9 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Send, Loader2, ExternalLink, User, Bot } from "lucide-react";
+import { Settings } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Slider } from "@/components/ui/slider";
 import toast from "react-hot-toast";
 
 interface Persona {
@@ -39,20 +42,24 @@ interface VideoReference {
 
 interface ChatInterfaceProps {
   persona: Persona;
+  chatSessionId?: string;
 }
 
-export function ChatInterface({ persona }: ChatInterfaceProps) {
+export function ChatInterface({ persona, chatSessionId }: ChatInterfaceProps) {
   const { user } = useAuth();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isStreaming, setIsStreaming] = useState(false);
+  const [topK, setTopK] = useState(10);
+  const [similarityFilter, setSimilarityFilter] = useState(0.5);
+  const [currentChatSessionId, setCurrentChatSessionId] = useState<string | undefined>(chatSessionId);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     loadChatHistory();
-  }, [persona.id, user]);
+  }, [persona.id, user, chatSessionId]);
 
   useEffect(() => {
     scrollToBottom();
@@ -63,14 +70,13 @@ export function ChatInterface({ persona }: ChatInterfaceProps) {
   };
 
   const loadChatHistory = async () => {
-    if (!user) return;
+    if (!user || !chatSessionId) return;
 
     const supabase = createClient();
     const { data, error } = await supabase
       .from("messages")
       .select("*")
-      .eq("persona_id", persona.id)
-      .eq("user_id", user.id)
+      .eq("chat_session_id", chatSessionId)
       .order("created_at", { ascending: true });
 
     if (!error && data) {
@@ -121,6 +127,9 @@ export function ChatInterface({ persona }: ChatInterfaceProps) {
           message: userMessage.content,
           channelId: persona.channel_id,
           userId: user?.id,
+          topK,
+          similarityFilter,
+          chatSessionId: currentChatSessionId,
         }),
         signal: abortControllerRef.current.signal,
       });
@@ -171,6 +180,11 @@ export function ChatInterface({ persona }: ChatInterfaceProps) {
                 });
               } else if (data.type === "complete") {
                 assistantMessage.id = data.messageId;
+                if (data.chatSessionId && !currentChatSessionId) {
+                  setCurrentChatSessionId(data.chatSessionId);
+                  // Update URL to include chat session ID
+                  window.history.replaceState(null, '', `/chat/${persona.username}/${data.chatSessionId}`);
+                }
                 setMessages((prev) => {
                   const newMessages = [...prev];
                   newMessages[newMessages.length - 1] = { ...assistantMessage };
@@ -377,6 +391,43 @@ export function ChatInterface({ persona }: ChatInterfaceProps) {
       <div className="border-t bg-white/80 backdrop-blur-md p-4">
         <form onSubmit={handleSubmit} className="max-w-4xl mx-auto">
           <div className="flex gap-2">
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="icon" type="button">
+                  <Settings className="h-4 w-4" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-80">
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">
+                      Top K Results: {topK}
+                    </label>
+                    <Slider
+                      value={[topK]}
+                      onValueChange={(value) => setTopK(value[0])}
+                      max={20}
+                      min={1}
+                      step={1}
+                      className="w-full"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">
+                      Similarity Filter: {similarityFilter.toFixed(2)}
+                    </label>
+                    <Slider
+                      value={[similarityFilter]}
+                      onValueChange={(value) => setSimilarityFilter(value[0])}
+                      max={1}
+                      min={0.1}
+                      step={0.05}
+                      className="w-full"
+                    />
+                  </div>
+                </div>
+              </PopoverContent>
+            </Popover>
             <Input
               value={input}
               onChange={(e) => setInput(e.target.value)}

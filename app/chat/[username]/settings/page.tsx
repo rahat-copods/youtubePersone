@@ -69,9 +69,16 @@ export default function PersonaSettingsPage() {
   const [processingCaptions, setProcessingCaptions] = useState<Set<string>>(
     new Set()
   );
+  const [currentPage, setCurrentPage] = useState(1);
+  const [videosPerPage] = useState(20);
+  const [hasMoreVideos, setHasMoreVideos] = useState(false);
+  const [videoTitleSearch, setVideoTitleSearch] = useState("");
+  const [videoIdFilter, setVideoIdFilter] = useState("");
   const [sortBy, setSortBy] = useState<SortBy>("newest");
   const [filterBy, setFilterBy] = useState<FilterBy>("all");
   const [discoveredCount, setDiscoveredCount] = useState(0);
+  const [bulkProcessingCount, setBulkProcessingCount] = useState(0);
+  const [bulkTotalCaptions, setBulkTotalCaptions] = useState(0);
 
   useEffect(() => {
     fetchPersonaAndVideos();
@@ -102,20 +109,57 @@ export default function PersonaSettingsPage() {
 
     setPersona(personaData);
 
-    // Fetch videos
-    const { data: videosData, error: videosError } = await supabase
+    // Fetch videos with pagination and filters
+    let query = supabase
       .from("videos")
       .select("*")
-      .eq("persona_id", personaData.id)
-      .order("published_at", { ascending: false });
+      .eq("persona_id", personaData.id);
+
+    // Apply filters
+    if (videoTitleSearch) {
+      query = query.ilike("title", `%${videoTitleSearch}%`);
+    }
+    if (videoIdFilter) {
+      query = query.eq("video_id", videoIdFilter);
+    }
+
+    // Apply pagination and sorting
+    const { data: videosData, error: videosError } = await query
+      .order("published_at", { ascending: sortBy === "oldest" })
+      .range((currentPage - 1) * videosPerPage, currentPage * videosPerPage - 1);
 
     if (!videosError && videosData) {
-      setVideos(videosData);
+      if (currentPage === 1) {
+        setVideos(videosData);
+      } else {
+        setVideos(prev => [...prev, ...videosData]);
+      }
+      setHasMoreVideos(videosData.length === videosPerPage);
       setDiscoveredCount(videosData.length);
     }
 
     setLoading(false);
   };
+
+  const loadMoreVideos = async () => {
+    setCurrentPage(prev => prev + 1);
+  };
+
+  const resetAndFetch = async () => {
+    setCurrentPage(1);
+    setVideos([]);
+    await fetchPersonaAndVideos();
+  };
+
+  useEffect(() => {
+    if (currentPage > 1) {
+      fetchPersonaAndVideos();
+    }
+  }, [currentPage]);
+
+  useEffect(() => {
+    resetAndFetch();
+  }, [videoTitleSearch, videoIdFilter, sortBy]);
 
   const discoverVideos = async () => {
     if (!persona) return;
@@ -193,29 +237,54 @@ export default function PersonaSettingsPage() {
 
     const processingKey = videoId || "all";
     setProcessingCaptions((prev) => new Set(prev).add(processingKey));
+    
+    if (!videoId) {
+      setBulkProcessingCount(0);
+      setBulkTotalCaptions(0);
+    }
 
     try {
-      const response = await fetch("/api/jobs/caption-embedding", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          personaId: persona.id,
-          channelId: persona.channel_id,
-          ...(videoId && { videoId }),
-        }),
-      });
+      let totalProcessed = 0;
+      let hasMore = true;
+      
+      while (hasMore) {
+        const response = await fetch("/api/jobs/caption-embedding", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            personaId: persona.id,
+            channelId: persona.channel_id,
+            ...(videoId && { videoId }),
+          }),
+        });
 
-      if (!response.ok) {
-        throw new Error("Failed to process embeddings");
-      }
+        if (!response.ok) {
+          throw new Error("Failed to process embeddings");
+        }
 
-      const result = await response.json();
-      if (result.success) {
-        toast.success(
-          result.message || `Processed ${result.embeddingsProcessed} embeddings`
-        );
-      } else {
-        toast.error(result.message || "Failed to process embeddings");
+        const result = await response.json();
+        if (result.success) {
+          totalProcessed += result.embeddingsProcessed;
+          
+          if (!videoId) {
+            setBulkProcessingCount(totalProcessed);
+            setBulkTotalCaptions(prev => prev + result.totalCaptions);
+          }
+          
+          // If we processed fewer than 100, we're done
+          hasMore = result.totalCaptions >= 100;
+          
+          if (!hasMore) {
+            toast.success(
+              videoId 
+                ? `Processed ${totalProcessed} embeddings for video`
+                : `Processed ${totalProcessed} embeddings total`
+            );
+          }
+        } else {
+          toast.error(result.message || "Failed to process embeddings");
+          break;
+        }
       }
 
       // Refresh the data
@@ -324,7 +393,7 @@ export default function PersonaSettingsPage() {
                 {processingCaptions.has("all") ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Processing All...
+                    Processing All... ({bulkProcessingCount}/{bulkTotalCaptions})
                   </>
                 ) : (
                   <>
@@ -382,7 +451,27 @@ export default function PersonaSettingsPage() {
         {/* Filters */}
         <Card className="mb-6">
           <CardContent className="pt-6">
-            <div className="flex gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div>
+                <label className="text-sm font-medium mb-2 block">
+                  Search by Title
+                </label>
+                <Input
+                  placeholder="Enter video title..."
+                  value={videoTitleSearch}
+                  onChange={(e) => setVideoTitleSearch(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium mb-2 block">
+                  Video ID
+                </label>
+                <Input
+                  placeholder="Enter video ID..."
+                  value={videoIdFilter}
+                  onChange={(e) => setVideoIdFilter(e.target.value)}
+                />
+              </div>
               <div className="flex-1">
                 <label className="text-sm font-medium mb-2 block">
                   Sort by
@@ -556,6 +645,14 @@ export default function PersonaSettingsPage() {
                   </div>
                 ))}
               </div>
+              
+              {hasMoreVideos && (
+                <div className="text-center py-4">
+                  <Button onClick={loadMoreVideos} variant="outline">
+                    Load More Videos
+                  </Button>
+                </div>
+              )}
             )}
           </CardContent>
         </Card>
