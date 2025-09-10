@@ -27,6 +27,8 @@ import {
 import Link from "next/link";
 import toast from "react-hot-toast";
 import { useAuth } from "@/components/providers/auth-provider";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 interface Persona {
   id: string;
@@ -126,13 +128,16 @@ export default function PersonaSettingsPage() {
     // Apply pagination and sorting
     const { data: videosData, error: videosError } = await query
       .order("published_at", { ascending: sortBy === "oldest" })
-      .range((currentPage - 1) * videosPerPage, currentPage * videosPerPage - 1);
+      .range(
+        (currentPage - 1) * videosPerPage,
+        currentPage * videosPerPage - 1
+      );
 
     if (!videosError && videosData) {
       if (currentPage === 1) {
         setVideos(videosData);
       } else {
-        setVideos(prev => [...prev, ...videosData]);
+        setVideos((prev) => [...prev, ...videosData]);
       }
       setHasMoreVideos(videosData.length === videosPerPage);
       setDiscoveredCount(videosData.length);
@@ -142,7 +147,7 @@ export default function PersonaSettingsPage() {
   };
 
   const loadMoreVideos = async () => {
-    setCurrentPage(prev => prev + 1);
+    setCurrentPage((prev) => prev + 1);
   };
 
   const resetAndFetch = async () => {
@@ -237,7 +242,7 @@ export default function PersonaSettingsPage() {
 
     const processingKey = videoId || "all";
     setProcessingCaptions((prev) => new Set(prev).add(processingKey));
-    
+
     if (!videoId) {
       setBulkProcessingCount(0);
       setBulkTotalCaptions(0);
@@ -246,7 +251,7 @@ export default function PersonaSettingsPage() {
     try {
       let totalProcessed = 0;
       let hasMore = true;
-      
+
       while (hasMore) {
         const response = await fetch("/api/jobs/caption-embedding", {
           method: "POST",
@@ -265,18 +270,18 @@ export default function PersonaSettingsPage() {
         const result = await response.json();
         if (result.success) {
           totalProcessed += result.embeddingsProcessed;
-          
+
           if (!videoId) {
             setBulkProcessingCount(totalProcessed);
-            setBulkTotalCaptions(prev => prev + result.totalCaptions);
+            setBulkTotalCaptions((prev) => prev + result.totalCaptions);
           }
-          
+
           // If we processed fewer than 100, we're done
           hasMore = result.totalCaptions >= 100;
-          
+
           if (!hasMore) {
             toast.success(
-              videoId 
+              videoId
                 ? `Processed ${totalProcessed} embeddings for video`
                 : `Processed ${totalProcessed} embeddings total`
             );
@@ -393,7 +398,8 @@ export default function PersonaSettingsPage() {
                 {processingCaptions.has("all") ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Processing All... ({bulkProcessingCount}/{bulkTotalCaptions})
+                    Processing All... ({bulkProcessingCount}/{bulkTotalCaptions}
+                    )
                   </>
                 ) : (
                   <>
@@ -463,9 +469,9 @@ export default function PersonaSettingsPage() {
                 />
               </div>
               <div>
-                <label className="text-sm font-medium mb-2 block">
+                <Label className="text-sm font-medium mb-2 block">
                   Video ID
-                </label>
+                </Label>
                 <Input
                   placeholder="Enter video ID..."
                   value={videoIdFilter}
@@ -533,126 +539,127 @@ export default function PersonaSettingsPage() {
                 </p>
               </div>
             ) : (
-              <div className="space-y-4">
-                {filteredAndSortedVideos.map((video) => (
-                  <div
-                    key={video.id}
-                    className="flex gap-4 p-4 border rounded-lg hover:bg-gray-50"
-                  >
-                    <img
-                      src={video.thumbnail_url}
-                      alt={video.title}
-                      className="w-32 h-20 object-cover rounded"
-                    />
-                    <div className="flex-1 min-w-0">
-                      <h4 className="font-medium truncate mb-1">
-                        {video.title}
-                      </h4>
-                      <p className="text-sm text-gray-600 line-clamp-2 mb-2">
-                        {video.description}
-                      </p>
-                      <div className="flex items-center gap-4 text-xs text-gray-500">
-                        <span>{video.duration}</span>
-                        <span>{video.view_count.toLocaleString()} views</span>
-                        <span>
-                          {new Date(video.published_at).toLocaleDateString()}
-                        </span>
+              <>
+                <div className="space-y-4">
+                  {filteredAndSortedVideos.map((video) => (
+                    <div
+                      key={video.id}
+                      className="flex gap-4 p-4 border rounded-lg hover:bg-gray-50"
+                    >
+                      <img
+                        src={video.thumbnail_url}
+                        alt={video.title}
+                        className="w-32 h-20 object-cover rounded"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <h4 className="font-medium truncate mb-1">
+                          {video.title}
+                        </h4>
+                        <p className="text-sm text-gray-600 line-clamp-2 mb-2">
+                          {video.description}
+                        </p>
+                        <div className="flex items-center gap-4 text-xs text-gray-500">
+                          <span>{video.duration}</span>
+                          <span>{video.view_count.toLocaleString()} views</span>
+                          <span>
+                            {new Date(video.published_at).toLocaleDateString()}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex flex-col items-end gap-2">
+                        <Badge
+                          variant={
+                            video.captions_status === "completed"
+                              ? "default"
+                              : video.captions_status === "failed"
+                              ? "destructive"
+                              : video.captions_status === "extracted"
+                              ? "secondary"
+                              : video.captions_status === "processing"
+                              ? "secondary"
+                              : "secondary"
+                          }
+                        >
+                          {video.captions_status === "completed"
+                            ? "Processed"
+                            : video.captions_status === "failed"
+                            ? "Failed"
+                            : video.captions_status === "extracted"
+                            ? "Ready for Embedding"
+                            : video.captions_status === "processing"
+                            ? "Extracting..."
+                            : "Pending"}
+                        </Badge>
+                        {video.captions_status === "pending" && (
+                          <Button
+                            size="sm"
+                            onClick={() => extractCaptions(video.video_id)}
+                            disabled={processingCaptions.has(video.video_id)}
+                          >
+                            {processingCaptions.has(video.video_id) ? (
+                              <>
+                                <Loader2 className="mr-2 h-3 w-3 animate-spin" />
+                                Extracting...
+                              </>
+                            ) : (
+                              <>
+                                <Play className="mr-2 h-3 w-3" />
+                                Extract Captions
+                              </>
+                            )}
+                          </Button>
+                        )}
+                        {video.captions_status === "extracted" && (
+                          <Button
+                            size="sm"
+                            onClick={() => processEmbeddings(video.video_id)}
+                            disabled={processingCaptions.has(video.video_id)}
+                          >
+                            {processingCaptions.has(video.video_id) ? (
+                              <>
+                                <Loader2 className="mr-2 h-3 w-3 animate-spin" />
+                                Embedding...
+                              </>
+                            ) : (
+                              <>
+                                <MessageSquare className="mr-2 h-3 w-3" />
+                                Process Embeddings
+                              </>
+                            )}
+                          </Button>
+                        )}
+                        {video.captions_status === "failed" && (
+                          <Button
+                            size="sm"
+                            onClick={() => extractCaptions(video.video_id)}
+                            disabled={processingCaptions.has(video.video_id)}
+                            variant="outline"
+                          >
+                            {processingCaptions.has(video.video_id) ? (
+                              <>
+                                <Loader2 className="mr-2 h-3 w-3 animate-spin" />
+                                Retrying...
+                              </>
+                            ) : (
+                              <>
+                                <Play className="mr-2 h-3 w-3" />
+                                Retry
+                              </>
+                            )}
+                          </Button>
+                        )}
                       </div>
                     </div>
-                    <div className="flex flex-col items-end gap-2">
-                      <Badge
-                        variant={
-                          video.captions_status === "completed"
-                            ? "default"
-                            : video.captions_status === "failed"
-                            ? "destructive"
-                            : video.captions_status === "extracted"
-                            ? "secondary"
-                            : video.captions_status === "processing"
-                            ? "secondary"
-                            : "secondary"
-                        }
-                      >
-                        {video.captions_status === "completed"
-                          ? "Processed"
-                          : video.captions_status === "failed"
-                          ? "Failed"
-                          : video.captions_status === "extracted"
-                          ? "Ready for Embedding"
-                          : video.captions_status === "processing"
-                          ? "Extracting..."
-                          : "Pending"}
-                      </Badge>
-                      {video.captions_status === "pending" && (
-                        <Button
-                          size="sm"
-                          onClick={() => extractCaptions(video.video_id)}
-                          disabled={processingCaptions.has(video.video_id)}
-                        >
-                          {processingCaptions.has(video.video_id) ? (
-                            <>
-                              <Loader2 className="mr-2 h-3 w-3 animate-spin" />
-                              Extracting...
-                            </>
-                          ) : (
-                            <>
-                              <Play className="mr-2 h-3 w-3" />
-                              Extract Captions
-                            </>
-                          )}
-                        </Button>
-                      )}
-                      {video.captions_status === "extracted" && (
-                        <Button
-                          size="sm"
-                          onClick={() => processEmbeddings(video.video_id)}
-                          disabled={processingCaptions.has(video.video_id)}
-                        >
-                          {processingCaptions.has(video.video_id) ? (
-                            <>
-                              <Loader2 className="mr-2 h-3 w-3 animate-spin" />
-                              Embedding...
-                            </>
-                          ) : (
-                            <>
-                              <MessageSquare className="mr-2 h-3 w-3" />
-                              Process Embeddings
-                            </>
-                          )}
-                        </Button>
-                      )}
-                      {video.captions_status === "failed" && (
-                        <Button
-                          size="sm"
-                          onClick={() => extractCaptions(video.video_id)}
-                          disabled={processingCaptions.has(video.video_id)}
-                          variant="outline"
-                        >
-                          {processingCaptions.has(video.video_id) ? (
-                            <>
-                              <Loader2 className="mr-2 h-3 w-3 animate-spin" />
-                              Retrying...
-                            </>
-                          ) : (
-                            <>
-                              <Play className="mr-2 h-3 w-3" />
-                              Retry
-                            </>
-                          )}
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-              
-              {hasMoreVideos && (
-                <div className="text-center py-4">
-                  <Button onClick={loadMoreVideos} variant="outline">
-                    Load More Videos
-                  </Button>
+                  ))}
                 </div>
-              )}
+                {hasMoreVideos && (
+                  <div className="text-center py-4">
+                    <Button onClick={loadMoreVideos} variant="outline">
+                      Load More Videos
+                    </Button>
+                  </div>
+                )}
+              </>
             )}
           </CardContent>
         </Card>
