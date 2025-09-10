@@ -3,6 +3,7 @@ import { createClient, serviceClient } from "@/lib/supabase/server";
 import { OpenAI } from "openai";
 import { z } from "zod";
 import { Pinecone } from "@pinecone-database/pinecone";
+import { zodResponseFormat } from "openai/helpers/zod";
 
 const requestSchema = z.object({
   personaId: z.string(),
@@ -21,6 +22,7 @@ const pinecone = new Pinecone({
 });
 
 export async function POST(request: NextRequest) {
+  const SIMILARITY_THRESHOLD = 0.5;
   try {
     const body = await request.json();
     const { personaId, message, userId, channelId } = requestSchema.parse(body);
@@ -50,14 +52,13 @@ export async function POST(request: NextRequest) {
     // Extract relevant context from Pinecone results
     const relevantContext =
       searchResults.matches
-        ?.filter((match) => match.score && match.score > 0.5) // Filter by similarity threshold
+        ?.filter((match) => match.score && match.score > SIMILARITY_THRESHOLD) // Filter by similarity threshold
         .map((match) => ({
           text: match.metadata?.text,
           video_id: match.metadata?.video_id,
           start: match.metadata?.start,
           video_title:
             match.metadata?.video_title || `Video ${match.metadata?.video_id}`,
-          timestamp: match.metadata?.start_time || 0,
           confidence: match.score,
         })) || [];
 
@@ -95,7 +96,7 @@ Relevant video transcripts for this question:
 ${relevantContext
   .map(
     (ctx: any) =>
-      `Video: "${ctx.video_title}" (${ctx.video_id}) at ${ctx.timestamp}\nContent: ${ctx.text}\n`
+      `Video: "${ctx.video_title}" (${ctx.video_id}) at ${ctx.start}\nContent: ${ctx.text}\n`
   )
   .join("\n")}
 
@@ -127,12 +128,15 @@ Respond as the channel creator would, using their knowledge, style, and perspect
           }
 
           // Extract video references from relevant context
-          const references = relevantContext.map((ctx: any) => ({
-            video_id: ctx.video_id,
-            title: ctx.video_title,
-            timestamp: ctx.timestamp,
-            confidence: 0.8, // Placeholder confidence score
-          }));
+          // Use AI to extract references from the response and available context
+          let references: any[] = [];
+          if (relevantContext.length > 0 && accumulatedContent.trim()) {
+            references = await extractReferencesWithAI(
+              accumulatedContent,
+              relevantContext,
+              message
+            );
+          }
 
           if (references.length > 0) {
             controller.enqueue(
@@ -214,4 +218,134 @@ async function getEmbedding(text: string): Promise<number[]> {
     input: text,
   });
   return response.data[0].embedding;
+}
+
+async function extractReferencesWithAI(
+  aiResponse: string,
+  availableContext: any[],
+  originalQuestion: string
+): Promise<any[]> {
+  const VideoReferenceSchema = z.object({
+    video_id: z.string().min(1, "Video ID cannot be empty"),
+    timestamp: z.number().nonnegative("Timestamp must be non-negative"),
+    confidence: z.number().min(0).max(1, "Confidence must be between 0 and 1"),
+  });
+
+  // Schema for an array of references
+  const VideoReferencesSchema = z.object({
+    references: z.array(VideoReferenceSchema),
+  });
+  try {
+    const contextSummary = availableContext
+      .map(
+        (ctx, index) =>
+          `${index + 1}. Video: "${ctx.video_title}" (ID: ${ctx.video_id}) at ${
+            ctx.start
+          }s\n   Content: ${ctx.text.substring(0, 200)}...`
+      )
+      .join("\n");
+    const referencesPrompt = `Given the AI response and available video context, identify which videos were actually referenced or would be most relevant to cite.
+
+AI Response:
+"${aiResponse}"
+
+Original Question: "${originalQuestion}"
+
+Available Video Context:
+${contextSummary}
+
+Instructions:
+1. Analyze which videos from the available context were actually referenced or implied in the AI response
+2. Consider which videos are most relevant to the user's question
+3. Rank them by relevance (max 3-5 references)
+4. Add accurate timestamps and confidence scores (0-1) for each reference 
+5. Return ONLY a JSON array with this exact structure:
+
+[
+  {
+    "video_id": "video_id_here",
+    "timestamp": timestamp_number,
+    "confidence": confidence_score_0_to_1,
+  }
+]
+
+Return only the JSON array, no other text.`;
+
+    const referencesResponse = await openai.chat.completions.create({
+      model: "gemini-2.5-flash",
+      messages: [{ role: "user", content: referencesPrompt }],
+      temperature: 0.3,
+      response_format: zodResponseFormat(
+        VideoReferencesSchema,
+        "video_reference"
+      ),
+    });
+
+    const referencesText = referencesResponse.choices[0]?.message?.content;
+    if (!referencesText) {
+      return [];
+    }
+    // Parse the JSON response
+    const parsedResponse = JSON.parse(referencesText);
+    const references = parsedResponse.references || parsedResponse;
+    // Create a lookup map for available context by video_id
+    const contextMap = new Map();
+    availableContext.forEach((ctx) => {
+      if (!contextMap.has(ctx.video_id)) {
+        contextMap.set(ctx.video_id, []);
+      }
+      contextMap.get(ctx.video_id).push(ctx);
+    });
+
+    // Validate and enrich references
+    const validatedReferences = JSON.parse(references)
+      .filter((ref: any) => {
+        // Check if video_id exists in available context
+        const isValidId = contextMap.has(ref.video_id);
+        if (!isValidId) {
+          console.warn(
+            `Video ID ${ref.video_id} not found in available context`
+          );
+        }
+        return isValidId;
+      })
+      .map((ref: any) => {
+        // Get the context for this video_id
+        const videoContexts = contextMap.get(ref.video_id);
+
+        // Find the context entry that matches or is closest to the timestamp
+        let matchingContext = videoContexts[0]; // Default to first entry
+
+        if (ref.timestamp && videoContexts.length > 1) {
+          // Find the context entry with the closest timestamp
+          matchingContext = videoContexts.reduce(
+            (closest: any, current: any) => {
+              const closestDiff = Math.abs(closest.timestamp - ref.timestamp);
+              const currentDiff = Math.abs(current.timestamp - ref.timestamp);
+              return currentDiff < closestDiff ? current : closest;
+            }
+          );
+        }
+
+        return {
+          id: ref.video_id,
+          title: matchingContext.video_title,
+          timestamp: ref.timestamp,
+          confidence: ref.confidence,
+          // Optional: add more context information
+          text_preview: matchingContext.text?.substring(0, 50) + "..." || "",
+        };
+      });
+
+    // return JSON.parse(referencesText);
+    console.log(
+      `Validated ${validatedReferences.length} out of ${
+        JSON.parse(references).length
+      } references`
+    );
+    return validatedReferences;
+  } catch (error) {
+    console.error("Error extracting references with AI:", error);
+    return [];
+  }
 }

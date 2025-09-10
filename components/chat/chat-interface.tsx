@@ -30,10 +30,11 @@ interface Message {
 }
 
 interface VideoReference {
-  video_id: string;
+  id: string;
   title: string;
-  timestamp: string;
+  timestamp: number;
   confidence: number;
+  text_preview: string;
 }
 
 interface ChatInterfaceProps {
@@ -319,7 +320,8 @@ export function ChatInterface({ persona }: ChatInterfaceProps) {
                                       {ref.title}
                                     </p>
                                     <p className="text-xs text-muted-foreground">
-                                      Timestamp: {ref.timestamp}s
+                                      Timestamp:{" "}
+                                      {(ref.timestamp / 60).toFixed(2)}m
                                     </p>
                                   </div>
                                   <Button
@@ -328,7 +330,7 @@ export function ChatInterface({ persona }: ChatInterfaceProps) {
                                     className="ml-2 h-6 w-6 p-0"
                                     onClick={() =>
                                       window.open(
-                                        `https://youtube.com/watch?v=${ref.video_id}&t=${ref.timestamp}`,
+                                        `https://youtube.com/watch?v=${ref.id}&t=${ref.timestamp}`,
                                         "_blank"
                                       )
                                     }
