@@ -93,8 +93,10 @@ export interface Database {
           duration: string
           published_at: string
           view_count: number
-          captions_status: string
+          captions_status: 'pending' | 'processing' | 'extracted' | 'completed' | 'failed'
           captions_error: string | null
+          processing_started_at: string | null
+          processing_completed_at: string | null
           created_at: string
           updated_at: string
         }
@@ -108,8 +110,10 @@ export interface Database {
           duration?: string
           published_at: string
           view_count?: number
-          captions_status?: string
+          captions_status?: 'pending' | 'processing' | 'extracted' | 'completed' | 'failed'
           captions_error?: string | null
+          processing_started_at?: string | null
+          processing_completed_at?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -123,8 +127,10 @@ export interface Database {
           duration?: string
           published_at?: string
           view_count?: number
-          captions_status?: string
+          captions_status?: 'pending' | 'processing' | 'extracted' | 'completed' | 'failed'
           captions_error?: string | null
+          processing_started_at?: string | null
+          processing_completed_at?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -132,30 +138,59 @@ export interface Database {
       captions: {
         Row: {
           id: string
+          persona_id: string
           video_id: string
           start_time: string
           duration: string
           text: string
-          embedding: number[]
+          embedding: number[] | null
           created_at: string
         }
         Insert: {
           id?: string
+          persona_id: string
           video_id: string
           start_time: string
           duration: string
           text: string
-          embedding: number[]
+          embedding?: number[] | null
           created_at?: string
         }
         Update: {
           id?: string
+          persona_id?: string
           video_id?: string
           start_time?: string
           duration?: string
           text?: string
-          embedding?: number[]
+          embedding?: number[] | null
           created_at?: string
+        }
+      }
+      chat_sessions: {
+        Row: {
+          id: string
+          persona_id: string
+          user_id: string | null
+          title: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          persona_id: string
+          user_id?: string | null
+          title: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          persona_id?: string
+          user_id?: string | null
+          title?: string
+          created_at?: string
+          updated_at?: string
         }
       }
       messages: {
@@ -163,6 +198,7 @@ export interface Database {
           id: string
           persona_id: string
           user_id: string | null
+          chat_session_id: string | null
           role: string
           content: string
           video_references: Json | null
@@ -172,6 +208,7 @@ export interface Database {
           id?: string
           persona_id: string
           user_id?: string | null
+          chat_session_id?: string | null
           role: string
           content: string
           video_references?: Json | null
@@ -181,6 +218,7 @@ export interface Database {
           id?: string
           persona_id?: string
           user_id?: string | null
+          chat_session_id?: string | null
           role?: string
           content?: string
           video_references?: Json | null

@@ -127,6 +127,7 @@ CREATE TABLE IF NOT EXISTS videos (
   view_count integer DEFAULT 0,
   captions_status text DEFAULT 'pending',
   captions_error text,
+  apify_runid text UNIQUE,
   created_at timestamptz DEFAULT now(),
   updated_at timestamptz DEFAULT now()
 );
@@ -135,10 +136,11 @@ CREATE TABLE IF NOT EXISTS videos (
 CREATE TABLE IF NOT EXISTS captions (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   video_id text REFERENCES videos(video_id) ON DELETE CASCADE,
+  persona_id uuid REFERENCES personas(id) ON DELETE CASCADE,
   start_time text NOT NULL,
   duration text NOT NULL,
   text text NOT NULL,
-  embedding vector(1536),
+  embedding vector(768),
   created_at timestamptz DEFAULT now()
 );
 
@@ -298,7 +300,7 @@ CREATE POLICY "Only service role can access jobs"
 
 -- Function for vector similarity search
 CREATE OR REPLACE FUNCTION match_captions (
-  query_embedding vector(1536),
+  query_embedding vector(768),
   persona_id uuid,
   match_threshold float DEFAULT 0.7,
   match_count int DEFAULT 5
