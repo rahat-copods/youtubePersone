@@ -81,6 +81,8 @@ export default function PersonaSettingsPage() {
   const [discoveredCount, setDiscoveredCount] = useState(0);
   const [bulkProcessingCount, setBulkProcessingCount] = useState(0);
   const [bulkTotalCaptions, setBulkTotalCaptions] = useState(0);
+  const [totalDiscoveredVideosInDb, setTotalDiscoveredVideosInDb] = useState(0);
+  const [totalProcessedCaptionsInDb, setTotalProcessedCaptionsInDb] = useState(0);
 
   useEffect(() => {
     fetchPersonaAndVideos();
@@ -111,6 +113,27 @@ export default function PersonaSettingsPage() {
 
     setPersona(personaData);
 
+    // Fetch total video counts from database
+    const { data: totalVideosData, error: totalVideosError } = await supabase
+      .from("videos")
+      .select("id", { count: "exact", head: true })
+      .eq("persona_id", personaData.id);
+
+    if (!totalVideosError) {
+      setTotalDiscoveredVideosInDb(totalVideosData?.length || 0);
+    }
+
+    // Fetch total processed captions count from database
+    const { data: processedCaptionsData, error: processedCaptionsError } = await supabase
+      .from("videos")
+      .select("id", { count: "exact", head: true })
+      .eq("persona_id", personaData.id)
+      .eq("captions_status", "completed");
+
+    if (!processedCaptionsError) {
+      setTotalProcessedCaptionsInDb(processedCaptionsData?.length || 0);
+    }
+
     // Fetch videos with pagination and filters
     let query = supabase
       .from("videos")
@@ -140,7 +163,6 @@ export default function PersonaSettingsPage() {
         setVideos((prev) => [...prev, ...videosData]);
       }
       setHasMoreVideos(videosData.length === videosPerPage);
-      setDiscoveredCount(videosData.length);
     }
 
     setLoading(false);
@@ -424,13 +446,16 @@ export default function PersonaSettingsPage() {
             <div className="space-y-4">
               <div className="flex justify-between text-sm">
                 <span>
-                  Videos Discovered: {discoveredCount} / {persona.video_count}
+                  Videos Discovered: {totalDiscoveredVideosInDb} / {persona.video_count}
                 </span>
                 <span>
-                  Captions Processed: {processedCount} / {videos.length}
+                  Captions Processed: {totalProcessedCaptionsInDb} / {totalDiscoveredVideosInDb}
                 </span>
               </div>
-              <Progress value={progressPercentage} className="w-full" />
+              <Progress 
+                value={totalDiscoveredVideosInDb > 0 ? (totalProcessedCaptionsInDb / totalDiscoveredVideosInDb) * 100 : 0} 
+                className="w-full" 
+              />
               <div className="flex gap-2">
                 <Button
                   onClick={discoverVideos}

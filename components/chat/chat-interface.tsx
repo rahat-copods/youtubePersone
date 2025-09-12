@@ -61,6 +61,12 @@ export function ChatInterface({ persona, chatSessionId }: ChatInterfaceProps) {
     loadChatHistory();
   }, [persona.id, user, chatSessionId]);
 
+  // Storage Flow Verification:
+  // ✅ loadChatHistory() only called on mount/dependency changes (persona.id, user, chatSessionId)
+  // ✅ messages state updated immediately for user messages (line ~120)
+  // ✅ messages state updated incrementally during streaming (line ~160+)
+  // ✅ No database re-fetching during conversation - only state updates
+
   useEffect(() => {
     scrollToBottom();
   }, [messages]);

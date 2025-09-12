@@ -173,6 +173,7 @@ Respond as the channel creator would, using their knowledge, style, and perspect
           }
 
           // Save user message
+          // Storage Flow: User message saved to DB before streaming begins
           const userMessageData: any = {
             persona_id: personaId,
             role: "user",
@@ -184,7 +185,7 @@ Respond as the channel creator would, using their knowledge, style, and perspect
           
           await supabase.from("messages").insert(userMessageData);
           
-          // Save assistant message
+          // Storage Flow: Assistant message saved to DB after streaming completes
           let messageId = null;
           if (userId) {
             const assistantMessageData: any = {
