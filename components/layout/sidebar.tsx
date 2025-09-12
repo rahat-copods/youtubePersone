@@ -118,6 +118,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
       toast.error('Failed to update title');
     }
   };
+  
   if (!user) return null;
 
   return (
@@ -238,19 +239,6 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
                     </Button>
                   )}
                 </div>
-              ))}
-            </div>
-          )}
-        </ScrollArea>
-      </aside>
-    </>
-  );
-}
-                  </div>
-                  <div className="text-xs text-muted-foreground mt-1">
-                    {new Date(session.updated_at).toLocaleDateString()}
-                  </div>
-                </Link>
               ))}
             </div>
           )}
