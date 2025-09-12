@@ -155,12 +155,16 @@ Respond as the channel creator would, using their knowledge, style, and perspect
           let sessionId = chatSessionId;
           if (!sessionId && userId) {
             // Create new chat session
+            const sessionTitle = message.length > 50 
+              ? `${message.substring(0, 50)}...` 
+              : message;
+              
             const { data: newSession } = await supabase
               .from("chat_sessions")
               .insert({
                 persona_id: personaId,
                 user_id: userId,
-                title: `Chat with ${persona.title} - ${new Date().toLocaleDateString()}`,
+                title: sessionTitle,
               })
               .select("id")
               .single();

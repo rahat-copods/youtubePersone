@@ -4,12 +4,14 @@ import { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/components/providers/auth-provider';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
-import { MessageSquare, Plus, X } from 'lucide-react';
+import { MessageSquare, Plus, X, Edit2, Check, X as XIcon } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
+import toast from 'react-hot-toast';
 
 interface ChatSession {
   id: string;
@@ -30,6 +32,8 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
   const pathname = usePathname();
   const [chatSessions, setChatSessions] = useState<ChatSession[]>([]);
   const [loading, setLoading] = useState(true);
+  const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
+  const [editingTitle, setEditingTitle] = useState('');
 
   useEffect(() => {
     if (!user) {
@@ -71,6 +75,49 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
     fetchChatSessions();
   }, [user]);
 
+  const startEditing = (sessionId: string, currentTitle: string) => {
+    setEditingSessionId(sessionId);
+    setEditingTitle(currentTitle);
+  };
+
+  const cancelEditing = () => {
+    setEditingSessionId(null);
+    setEditingTitle('');
+  };
+
+  const saveTitle = async (sessionId: string) => {
+    if (!editingTitle.trim()) {
+      toast.error('Title cannot be empty');
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/chat-sessions/${sessionId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: editingTitle.trim() }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update title');
+      }
+
+      // Update local state
+      setChatSessions(prev => 
+        prev.map(session => 
+          session.id === sessionId 
+            ? { ...session, title: editingTitle.trim() }
+            : session
+        )
+      );
+
+      setEditingSessionId(null);
+      setEditingTitle('');
+      toast.success('Title updated successfully');
+    } catch (error) {
+      toast.error('Failed to update title');
+    }
+  };
   if (!user) return null;
 
   return (
@@ -121,18 +168,84 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
           ) : (
             <div className="space-y-2 py-4">
               {chatSessions.map((session) => (
-                <Link
+                <div
                   key={session.id}
-                  href={`/chat/${session.persona_username}/${session.id}`}
-                  onClick={onClose}
-                  className={cn(
-                    "block p-3 rounded-lg hover:bg-gray-50 transition-colors",
-                    pathname.includes(`/chat/${session.persona_username}/${session.id}`) && "bg-purple-50 border border-purple-200"
-                  )}
+                  className="group relative"
                 >
-                  <div className="font-medium text-sm truncate">{session.persona_title}</div>
-                  <div className="text-xs text-muted-foreground truncate mt-1">
-                    {session.title}
+                  <Link
+                    href={`/chat/${session.persona_username}/${session.id}`}
+                    onClick={onClose}
+                    className={cn(
+                      "block p-3 rounded-lg hover:bg-gray-50 transition-colors",
+                      pathname.includes(`/chat/${session.persona_username}/${session.id}`) && "bg-purple-50 border border-purple-200"
+                    )}
+                  >
+                    <div className="font-medium text-sm truncate">{session.persona_title}</div>
+                    <div className="text-xs text-muted-foreground mt-1 pr-8">
+                      {editingSessionId === session.id ? (
+                        <div className="flex items-center gap-1" onClick={(e) => e.preventDefault()}>
+                          <Input
+                            value={editingTitle}
+                            onChange={(e) => setEditingTitle(e.target.value)}
+                            className="h-6 text-xs"
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                saveTitle(session.id);
+                              } else if (e.key === 'Escape') {
+                                cancelEditing();
+                              }
+                            }}
+                            onBlur={() => saveTitle(session.id)}
+                            autoFocus
+                          />
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-6 w-6 p-0"
+                            onClick={() => saveTitle(session.id)}
+                          >
+                            <Check className="h-3 w-3" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-6 w-6 p-0"
+                            onClick={cancelEditing}
+                          >
+                            <XIcon className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="truncate">{session.title}</div>
+                      )}
+                    </div>
+                    <div className="text-xs text-muted-foreground mt-1">
+                      {new Date(session.updated_at).toLocaleDateString()}
+                    </div>
+                  </Link>
+                  
+                  {editingSessionId !== session.id && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="absolute top-2 right-2 h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        startEditing(session.id, session.title);
+                      }}
+                    >
+                      <Edit2 className="h-3 w-3" />
+                    </Button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </ScrollArea>
+      </aside>
+    </>
+  );
+}
                   </div>
                   <div className="text-xs text-muted-foreground mt-1">
                     {new Date(session.updated_at).toLocaleDateString()}
