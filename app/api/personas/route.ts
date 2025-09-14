@@ -174,6 +174,26 @@ export async function POST(request: NextRequest) {
         { status: 500 }
       );
     }
+
+    // Create video discovery job
+    const { error: jobError } = await supabase
+      .from("jobs")
+      .insert({
+        type: "video_discovery",
+        payload: {
+          personaId: persona.id,
+          channelId: persona.channel_id,
+        },
+        idempotency_key: `video_discovery-${persona.id}`,
+        scheduled_at: new Date().toISOString(),
+        max_retries: 3,
+      });
+
+    if (jobError) {
+      console.error("Failed to create video discovery job:", jobError);
+      // Don't fail the persona creation, just log the error
+    }
+
     // create PeronaIndex in Pinecone
     await ensurePineconeIndex(persona.channel_id);
     return NextResponse.json(

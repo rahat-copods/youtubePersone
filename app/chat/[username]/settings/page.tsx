@@ -29,6 +29,7 @@ import toast from "react-hot-toast";
 import { useAuth } from "@/components/providers/auth-provider";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 interface Persona {
   id: string;
@@ -83,6 +84,9 @@ export default function PersonaSettingsPage() {
   const [bulkTotalCaptions, setBulkTotalCaptions] = useState(0);
   const [totalDiscoveredVideosInDb, setTotalDiscoveredVideosInDb] = useState(0);
   const [totalProcessedCaptionsInDb, setTotalProcessedCaptionsInDb] = useState(0);
+  const [showPriorityModal, setShowPriorityModal] = useState(false);
+  const [priorityTestCode, setPriorityTestCode] = useState('');
+  const [priorityProcessing, setPriorityProcessing] = useState(false);
 
   useEffect(() => {
     fetchPersonaAndVideos();
@@ -327,6 +331,40 @@ export default function PersonaSettingsPage() {
     }
   };
 
+  const handlePriorityBoost = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!persona) return;
+
+    setPriorityProcessing(true);
+    try {
+      const response = await fetch('/api/user/priority-boost', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          personaId: persona.id,
+          testCode: priorityTestCode,
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.text();
+        throw new Error(error);
+      }
+
+      const result = await response.json();
+      toast.success(result.message);
+      setShowPriorityModal(false);
+      setPriorityTestCode('');
+      
+      // Refresh data
+      await fetchPersonaAndVideos();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to activate priority boost');
+    } finally {
+      setPriorityProcessing(false);
+    }
+  };
+
   const filteredAndSortedVideos = videos
     .filter((video) => {
       switch (filterBy) {
@@ -431,6 +469,24 @@ export default function PersonaSettingsPage() {
                 )}
               </Button>
             )}
+            <Button
+              onClick={() => setShowPriorityModal(true)}
+              disabled={priorityProcessing}
+              variant="outline"
+              className="bg-gradient-to-r from-purple-600 to-teal-600 text-white hover:from-purple-700 hover:to-teal-700"
+            >
+              {priorityProcessing ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Activating...
+                </>
+              ) : (
+                <>
+                  <Sync className="mr-2 h-4 w-4" />
+                  Priority Sync Videos
+                </>
+              )}
+            </Button>
           </div>
         </div>
 
@@ -689,6 +745,89 @@ export default function PersonaSettingsPage() {
           </CardContent>
         </Card>
       </main>
+
+      {/* Priority Boost Modal */}
+      <Dialog open={showPriorityModal} onOpenChange={setShowPriorityModal}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Sync className="h-5 w-5 text-purple-600" />
+              Priority Video Processing
+            </DialogTitle>
+          </DialogHeader>
+          
+          <form onSubmit={handlePriorityBoost} className="space-y-4">
+            <div className="text-center py-4">
+              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-r from-purple-100 to-teal-100 flex items-center justify-center">
+                <Sync className="w-8 h-8 text-purple-600" />
+              </div>
+              <h3 className="text-lg font-semibold mb-2">
+                Boost Processing Priority
+              </h3>
+              <p className="text-sm text-gray-600 mb-4">
+                Get your videos processed faster with priority queue access.
+              </p>
+              <p className="text-2xl font-bold text-purple-600">
+                $5.00
+                <span className="text-sm text-gray-500 font-normal">
+                  /one-time boost
+                </span>
+              </p>
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="priorityTestCode">Test Payment Code</Label>
+              <Input
+                id="priorityTestCode"
+                type="text"
+                placeholder="Enter 000000000 for test payment"
+                value={priorityTestCode}
+                onChange={(e) => setPriorityTestCode(e.target.value)}
+                required
+              />
+              <p className="text-xs text-gray-500">
+                This is a test environment. Use code "000000000" to simulate a successful payment.
+              </p>
+            </div>
+            
+            <div className="bg-blue-50 p-3 rounded-lg">
+              <h4 className="font-medium text-sm mb-2">What you get:</h4>
+              <ul className="text-xs text-gray-600 space-y-1">
+                <li>• Immediate video discovery</li>
+                <li>• Priority caption extraction</li>
+                <li>• Faster embedding processing</li>
+                <li>• Jump to front of processing queue</li>
+              </ul>
+            </div>
+            
+            <div className="flex gap-3">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setShowPriorityModal(false)}
+                className="flex-1"
+                disabled={priorityProcessing}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                disabled={priorityProcessing}
+                className="flex-1"
+              >
+                {priorityProcessing ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Processing...
+                  </>
+                ) : (
+                  'Activate Priority Boost'
+                )}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -93,19 +93,47 @@ export async function POST(request: NextRequest) {
         }
 
         // Update video status to 'extracted' (captions available but not embedded)
-        const { data: updateData, error: updateError } = await supabase
+        const { error: updateError } = await supabase
           .from("videos")
           .update({
             captions_status: "extracted",
             updated_at: new Date().toISOString(),
           })
           .eq("video_id", videoId)
-          .select();
+
         if (updateError) {
           console.error("Error updating video status:", updateError);
           throw new Error(
             `Failed to update video status: ${updateError.message}`
           );
+        }
+
+        // Create caption embedding job
+        const { data: videoData } = await supabase
+          .from("videos")
+          .select("persona_id, personas!inner(channel_id)")
+          .eq("video_id", videoId)
+          .single();
+
+        if (videoData) {
+          const { error: jobError } = await supabase
+            .from("jobs")
+            .insert({
+              type: "caption_embedding",
+              payload: {
+                videoId: videoId,
+                personaId: videoData.persona_id,
+                channelId: videoData.personas.channel_id,
+              },
+              idempotency_key: `caption_embedding-${videoId}`,
+              scheduled_at: new Date().toISOString(),
+              max_retries: 3,
+            });
+
+          if (jobError) {
+            console.error("Failed to create caption embedding job:", jobError);
+            // Don't fail the caption extraction, just log the error
+          }
         }
 
         return NextResponse.json({

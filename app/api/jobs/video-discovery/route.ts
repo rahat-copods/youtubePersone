@@ -45,12 +45,13 @@ export async function POST(request: NextRequest) {
       }));
 
       // Use upsert to avoid duplicates
-      const { error: insertError } = await supabase
+      const { data: insertedVideos, error: insertError } = await supabase
         .from("videos")
         .upsert(videos, {
           onConflict: "video_id",
           ignoreDuplicates: true,
-        });
+        })
+        .select("video_id");
 
       if (insertError) {
         console.error("Video insertion error:", insertError);
@@ -58,6 +59,29 @@ export async function POST(request: NextRequest) {
           { error: "Failed to save videos" },
           { status: 500 }
         );
+      }
+
+      // Create caption extraction jobs for newly inserted videos
+      if (insertedVideos && insertedVideos.length > 0) {
+        const captionJobs = insertedVideos.map((video) => ({
+          type: "caption_extraction",
+          payload: {
+            videoId: video.video_id,
+            personaId: personaId,
+          },
+          idempotency_key: `caption_extraction-${video.video_id}`,
+          scheduled_at: new Date().toISOString(),
+          max_retries: 3,
+        }));
+
+        const { error: jobsError } = await supabase
+          .from("jobs")
+          .insert(captionJobs);
+
+        if (jobsError) {
+          console.error("Failed to create caption extraction jobs:", jobsError);
+          // Don't fail the video discovery, just log the error
+        }
       }
 
       // Update persona with new continuation token and status
