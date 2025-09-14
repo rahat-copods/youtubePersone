@@ -4,6 +4,7 @@ import { createServerClient } from "@supabase/ssr";
 import { z } from "zod";
 import { v4 as uuidv4 } from "uuid";
 import { ensurePineconeIndex } from "@/lib/pinecone/createIndex";
+import { getPlanLimits } from "@/lib/pricing";
 
 const createPersonaSchema = z.object({
   channelId: z.string(),
@@ -57,6 +58,57 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Get user's current plan
+    const { data: userData, error: userError } = await supabase
+      .from('users')
+      .select('plan')
+      .eq('id', user.id)
+      .single();
+
+    if (userError) {
+      console.error('Failed to fetch user plan:', userError);
+      return NextResponse.json(
+        { error: 'Failed to verify user plan' },
+        { status: 500 }
+      );
+    }
+
+    const userPlan = userData?.plan || 'free';
+    const planLimits = getPlanLimits(userPlan);
+
+    // Check if user can create personas
+    if (planLimits.maxPersonas === 0) {
+      return NextResponse.json(
+        { error: 'Upgrade to a paid plan to create personas' },
+        { status: 403 }
+      );
+    }
+
+    // Count existing personas
+    const { data: existingPersonas, error: countError } = await supabase
+      .from('personas')
+      .select('id, is_public')
+      .eq('user_id', user.id);
+
+    if (countError) {
+      console.error('Failed to count existing personas:', countError);
+      return NextResponse.json(
+        { error: 'Failed to verify persona limits' },
+        { status: 500 }
+      );
+    }
+
+    const totalPersonas = existingPersonas?.length || 0;
+    const privatePersonas = existingPersonas?.filter(p => !p.is_public).length || 0;
+
+    // Check total persona limit
+    if (totalPersonas >= planLimits.maxPersonas) {
+      return NextResponse.json(
+        { error: `You've reached your limit of ${planLimits.maxPersonas} personas. Upgrade your plan to create more.` },
+        { status: 403 }
+      );
+    }
+
     // Ensure user exists in public.users table
     // const { error: userUpsertError } = await supabase
     //   .from('users')
@@ -75,6 +127,14 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json();
     const validatedData = createPersonaSchema.parse(body);
+
+    // Check private persona limit
+    if (!validatedData.isPublic && privatePersonas >= planLimits.maxPrivatePersonas) {
+      return NextResponse.json(
+        { error: `You've reached your limit of ${planLimits.maxPrivatePersonas} private personas. Upgrade your plan or make this persona public.` },
+        { status: 403 }
+      );
+    }
 
     // Check if persona already exists
     const { data: existingPersona } = await supabase

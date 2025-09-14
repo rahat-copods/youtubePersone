@@ -3,17 +3,18 @@
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/components/providers/auth-provider';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { LogOut, User } from 'lucide-react';
+import { LogOut, User, CreditCard } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import Link from 'next/link';
 
 export function Header() {
-  const { user, signOut } = useAuth();
+  const { user, userPlan, planInfo, signOut } = useAuth();
 
   return (
     <header className="border-b bg-white/80 backdrop-blur-md sticky top-0 z-50">
@@ -38,8 +39,19 @@ export function Header() {
                 <div className="flex items-center justify-start gap-2 p-2">
                   <div className="flex flex-col space-y-1 leading-none">
                     <p className="font-medium">{user.email}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {planInfo.name} Plan
+                    </p>
                   </div>
                 </div>
+                <DropdownMenuSeparator />
+                <Link href="/pricing">
+                  <DropdownMenuItem>
+                    <CreditCard className="mr-2 h-4 w-4" />
+                    <span>Manage Plan</span>
+                  </DropdownMenuItem>
+                </Link>
+                <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={signOut}>
                   <LogOut className="mr-2 h-4 w-4" />
                   <span>Sign out</span>

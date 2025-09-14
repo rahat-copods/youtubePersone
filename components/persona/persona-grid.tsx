@@ -22,7 +22,7 @@ interface Persona {
 }
 
 export function PersonaGrid() {
-  const { user } = useAuth();
+  const { user, userPlan, planInfo } = useAuth();
   const [personas, setPersonas] = useState<Persona[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -70,13 +70,47 @@ export function PersonaGrid() {
       <div className="text-center py-12">
         <Video className="mx-auto h-16 w-16 text-gray-400 mb-4" />
         <h3 className="text-lg font-semibold text-gray-900 mb-2">No personas yet</h3>
-        <p className="text-gray-600 mb-6">Create your first persona to start chatting with AI representations of YouTube channels.</p>
+        <p className="text-gray-600 mb-6">
+          {user && planInfo.limits.maxPersonas === 0 
+            ? 'Upgrade to a paid plan to create personas and start chatting with AI representations of YouTube channels.'
+            : 'Create your first persona to start chatting with AI representations of YouTube channels.'
+          }
+        </p>
+        {user && planInfo.limits.maxPersonas === 0 && (
+          <Link href="/pricing">
+            <Button>
+              View Pricing Plans
+            </Button>
+          </Link>
+        )}
       </div>
     );
   }
 
+  const userPersonas = personas.filter(p => p.user_id === user?.id);
+
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+    <div className="space-y-6">
+      {/* Plan Status for Authenticated Users */}
+      {user && (
+        <div className="bg-white rounded-lg border p-4">
+          <div className="flex justify-between items-center">
+            <div>
+              <h3 className="font-semibold">Current Plan: {planInfo.name}</h3>
+              <p className="text-sm text-gray-600">
+                {userPersonas.length}/{planInfo.limits.maxPersonas} personas created
+              </p>
+            </div>
+            <Link href="/pricing">
+              <Button variant="outline" size="sm">
+                {userPlan === 'free' ? 'Upgrade Plan' : 'Manage Plan'}
+              </Button>
+            </Link>
+          </div>
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
       {personas.map((persona) => (
         <Card key={persona.id} className="overflow-hidden hover:shadow-lg transition-all duration-300 group">
           <div className="aspect-video relative overflow-hidden">
@@ -142,6 +176,7 @@ export function PersonaGrid() {
           </CardContent>
         </Card>
       ))}
+      </div>
     </div>
   );
 }

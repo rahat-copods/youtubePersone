@@ -9,6 +9,7 @@ import { Plus, Loader2, Youtube } from 'lucide-react';
 import { useAuth } from '@/components/providers/auth-provider';
 import { Card, CardContent } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
+import Link from 'next/link';
 import toast from 'react-hot-toast';
 
 interface ChannelPreview {
@@ -21,13 +22,36 @@ interface ChannelPreview {
 }
 
 export function AddPersonaDialog() {
-  const { user } = useAuth();
+  const { user, userPlan, planInfo } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const [channelInput, setChannelInput] = useState('');
   const [preview, setPreview] = useState<ChannelPreview | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [isPublic, setIsPublic] = useState(true);
+  const [personaCount, setPersonaCount] = useState(0);
+  const [privatePersonaCount, setPrivatePersonaCount] = useState(0);
+
+  // Fetch user's current persona counts
+  useEffect(() => {
+    if (user && isOpen) {
+      fetchPersonaCounts();
+    }
+  }, [user, isOpen]);
+
+  const fetchPersonaCounts = async () => {
+    try {
+      const response = await fetch('/api/personas');
+      if (response.ok) {
+        const personas = await response.json();
+        const userPersonas = personas.filter((p: any) => p.user_id === user?.id);
+        setPersonaCount(userPersonas.length);
+        setPrivatePersonaCount(userPersonas.filter((p: any) => !p.is_public).length);
+      }
+    } catch (error) {
+      console.error('Failed to fetch persona counts:', error);
+    }
+  };
 
   const fetchChannelInfo = async () => {
     if (!channelInput.trim()) return;
@@ -99,19 +123,24 @@ export function AddPersonaDialog() {
 
   if (!user) {
     return (
-      <Button variant="outline">
-        <Plus className="mr-2 h-4 w-4" />
-        Sign in to add personas
-      </Button>
+      <Link href="/auth/signin">
+        <Button variant="outline">
+          <Plus className="mr-2 h-4 w-4" />
+          Sign in to add personas
+        </Button>
+      </Link>
     );
   }
+
+  const canCreatePersona = personaCount < planInfo.limits.maxPersonas;
+  const canCreatePrivatePersona = privatePersonaCount < planInfo.limits.maxPrivatePersonas;
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
-        <Button>
+        <Button disabled={!canCreatePersona}>
           <Plus className="mr-2 h-4 w-4" />
-          Add Persona
+          {canCreatePersona ? 'Add Persona' : 'Upgrade to Add Personas'}
         </Button>
       </DialogTrigger>
       
@@ -124,6 +153,33 @@ export function AddPersonaDialog() {
         </DialogHeader>
         
         <div className="space-y-4">
+          {/* Plan Status */}
+          <div className="bg-gray-50 p-3 rounded-lg">
+            <div className="flex justify-between items-center mb-2">
+              <span className="text-sm font-medium">Current Plan: {planInfo.name}</span>
+              <Link href="/pricing">
+                <Button variant="link" size="sm" className="h-auto p-0">
+                  Upgrade
+                </Button>
+              </Link>
+            </div>
+            <div className="text-xs text-gray-600 space-y-1">
+              <div>Personas: {personaCount}/{planInfo.limits.maxPersonas}</div>
+              <div>Private Personas: {privatePersonaCount}/{planInfo.limits.maxPrivatePersonas}</div>
+            </div>
+          </div>
+
+          {!canCreatePersona && (
+            <div className="bg-yellow-50 border border-yellow-200 p-3 rounded-lg">
+              <p className="text-sm text-yellow-800">
+                You've reached your persona limit. 
+                <Link href="/pricing" className="font-medium underline ml-1">
+                  Upgrade your plan
+                </Link> to create more personas.
+              </p>
+            </div>
+          )}
+
           <div className="space-y-2">
             <Label htmlFor="channel">YouTube Channel</Label>
             <div className="flex gap-2">
@@ -133,10 +189,11 @@ export function AddPersonaDialog() {
                 value={channelInput}
                 onChange={(e) => setChannelInput(e.target.value)}
                 className="flex-1"
+                disabled={!canCreatePersona}
               />
               <Button 
                 onClick={fetchChannelInfo} 
-                disabled={isLoading || !channelInput.trim()}
+                disabled={isLoading || !channelInput.trim() || !canCreatePersona}
                 variant="outline"
               >
                 {isLoading ? (
@@ -175,16 +232,23 @@ export function AddPersonaDialog() {
                   <Checkbox 
                     id="public" 
                     checked={isPublic} 
-                    onCheckedChange={(checked) => setIsPublic(checked as boolean)} 
+                    onCheckedChange={(checked) => setIsPublic(checked as boolean)}
+                    disabled={!isPublic && !canCreatePrivatePersona}
                   />
                   <Label htmlFor="public" className="text-sm">
                     Make this persona public (others can chat with it)
                   </Label>
                 </div>
                 
+                {!isPublic && !canCreatePrivatePersona && (
+                  <p className="text-xs text-yellow-600 mt-2">
+                    You've reached your private persona limit. This will be created as public.
+                  </p>
+                )}
+                
                 <Button 
                   onClick={createPersona} 
-                  disabled={isCreating}
+                  disabled={isCreating || !canCreatePersona}
                   className="w-full mt-4"
                 >
                   {isCreating ? (
