@@ -99,7 +99,7 @@ export async function POST(request: NextRequest) {
             captions_status: "extracted",
             updated_at: new Date().toISOString(),
           })
-          .eq("video_id", videoId)
+          .eq("video_id", videoId);
 
         if (updateError) {
           console.error("Error updating video status:", updateError);
@@ -111,24 +111,30 @@ export async function POST(request: NextRequest) {
         // Create caption embedding job
         const { data: videoData } = await supabase
           .from("videos")
-          .select("persona_id, personas!inner(channel_id)")
+          .select(
+            `
+            persona_id,
+            personas!inner(
+              channel_id
+            )
+          `
+          )
           .eq("video_id", videoId)
           .single();
 
         if (videoData) {
-          const { error: jobError } = await supabase
-            .from("jobs")
-            .insert({
-              type: "caption_embedding",
-              payload: {
-                videoId: videoId,
-                personaId: videoData.persona_id,
-                channelId: videoData.personas.channel_id,
-              },
-              idempotency_key: `caption_embedding-${videoId}`,
-              scheduled_at: new Date().toISOString(),
-              max_retries: 3,
-            });
+          console.log(videoData);
+          const { error: jobError } = await supabase.from("jobs").insert({
+            type: "caption_embedding",
+            payload: {
+              videoId: videoId,
+              personaId: videoData.persona_id,
+              channelId: videoData.personas[0].channel_id,
+            },
+            idempotency_key: `caption_embedding-${videoId}`,
+            scheduled_at: new Date().toISOString(),
+            max_retries: 3,
+          });
 
           if (jobError) {
             console.error("Failed to create caption embedding job:", jobError);
