@@ -30,6 +30,7 @@ import { useAuth } from "@/components/providers/auth-provider";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Progress } from "@/components/ui/progress";
 
 interface Persona {
   id: string;
@@ -508,11 +509,10 @@ export default function PersonaSettingsPage() {
                   Captions Processed: {totalProcessedCaptionsInDb} / {totalDiscoveredVideosInDb}
                 </span>
               </div>
-              "Implement Custom Progress @radix-ui/react-progress is throwing error"
-              {/* <Progress 
+              <Progress 
                 value={totalDiscoveredVideosInDb > 0 ? (totalProcessedCaptionsInDb / totalDiscoveredVideosInDb) * 100 : 0} 
                 className="w-full" 
-              /> */}
+              />
               <div className="flex gap-2">
                 <Button
                   onClick={discoverVideos}
