@@ -7,7 +7,7 @@ import { Header } from "@/components/layout/header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
+// import { Progress } from "@/components/ui/progress";
 import {
   Select,
   SelectContent,
@@ -109,7 +109,7 @@ export default function PersonaSettingsPage() {
     }
 
     // Check if user owns this persona
-    if (!user || personaData.user_id !== user.id) {
+    if (!user || (personaData.user_id !== user.id && !personaData.is_public)) {
       toast.error("You do not have permission to manage this persona");
       router.push(`/chat/${username}`);
       return;
@@ -508,10 +508,11 @@ export default function PersonaSettingsPage() {
                   Captions Processed: {totalProcessedCaptionsInDb} / {totalDiscoveredVideosInDb}
                 </span>
               </div>
-              <Progress 
+              "Implement Custom Progress @radix-ui/react-progress is throwing error"
+              {/* <Progress 
                 value={totalDiscoveredVideosInDb > 0 ? (totalProcessedCaptionsInDb / totalDiscoveredVideosInDb) * 100 : 0} 
                 className="w-full" 
-              />
+              /> */}
               <div className="flex gap-2">
                 <Button
                   onClick={discoverVideos}
